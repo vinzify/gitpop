@@ -442,7 +442,7 @@ function App() {
                     {file.path.split('/').slice(0, -1).join('/')}
                   </span>
                 </span>
-                <span className={`file - status status - ${file.status} `}>{file.status}</span>
+                <span className={`file-status status-${file.status}`}>{file.status}</span>
               </div>
             ))}
           </div>

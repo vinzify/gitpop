@@ -1,6 +1,6 @@
 [package]
 name = "tauri-appgitpop"
-version = "1.1.1"
+version = "1.1.2"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
@@ -22,7 +22,7 @@ tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-reqwest = { version = "0.13.2", features = ["json"] }
+reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
 winreg = "0.55.0"
 tauri-plugin-store = "2"
 tauri-plugin-process = "2"
