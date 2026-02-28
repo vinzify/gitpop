@@ -245,25 +245,28 @@ async fn generate_ai_commit(diff: String, config: AiConfig) -> Result<String, St
 
 #[tauri::command]
 async fn get_ollama_models() -> Result<Vec<String>, String> {
-    let client = Client::builder()
-        .timeout(std::time::Duration::from_secs(5))
-        .build()
-        .map_err(|e| e.to_string())?;
+    let output = std::process::Command::new("ollama")
+        .arg("list")
+        .output()
+        .map_err(|e| format!("Failed to execute 'ollama list': {}", e))?;
 
-    let res = client.get("http://localhost:11434/api/tags")
-        .send()
-        .await
-        .map_err(|e| format!("Failed to connect to local Ollama: {}", e))?;
-
-    if !res.status().is_success() {
-        return Err(format!("Ollama API error: {}", res.status()));
+    if !output.status.success() {
+        let err = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("'ollama list' failed: {}", err));
     }
 
-    let parsed: OllamaTagsResponse = res.json()
-        .await
-        .map_err(|e| format!("Failed to parse Ollama tags response: {}", e))?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut models = Vec::new();
 
-    Ok(parsed.models.into_iter().map(|m| m.name).collect())
+    for line in stdout.lines().skip(1) {
+        if let Some(model_name) = line.split_whitespace().next() {
+            if !model_name.is_empty() {
+                models.push(model_name.to_string());
+            }
+        }
+    }
+
+    Ok(models)
 }
 
 #[tauri::command]

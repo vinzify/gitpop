@@ -257,51 +257,55 @@ function App() {
 
           <div className="settings-group">
             <label>Model Name</label>
-            <input
-              type="text"
-              list="model-suggestions"
+            <select
               value={aiModel}
               onChange={(e) => setAiModel(e.target.value)}
-              placeholder={aiProvider === 'ollama' ? 'llama3.2' : aiProvider === 'openai' ? 'gpt-4o' : 'gemini-1.5-flash'}
               className="settings-input"
-            />
-            <datalist id="model-suggestions">
+            >
+              {/* Ensure currently selected model is always an option even if custom */}
+              {aiModel && 
+               !(aiProvider === 'openai' && ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "o1-preview", "o1-mini", "o3-mini"].includes(aiModel)) &&
+               !(aiProvider === 'gemini' && ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-1.5-flash", "gemini-1.5-pro"].includes(aiModel)) &&
+               !(aiProvider === 'ollama' && (localOllamaModels.length > 0 ? localOllamaModels.includes(aiModel) : ["llama3.2", "llama3.1", "mistral", "qwen2.5-coder", "deepseek-coder"].includes(aiModel))) && (
+                 <option value={aiModel}>{aiModel} (Custom)</option>
+              )}
+
               {aiProvider === 'openai' && (
                 <>
-                  <option value="gpt-4o" />
-                  <option value="gpt-4o-mini" />
-                  <option value="gpt-4-turbo" />
-                  <option value="o1-preview" />
-                  <option value="o1-mini" />
-                  <option value="o3-mini" />
+                  <option value="gpt-4o">gpt-4o</option>
+                  <option value="gpt-4o-mini">gpt-4o-mini</option>
+                  <option value="gpt-4-turbo">gpt-4-turbo</option>
+                  <option value="o1-preview">o1-preview</option>
+                  <option value="o1-mini">o1-mini</option>
+                  <option value="o3-mini">o3-mini</option>
                 </>
               )}
               {aiProvider === 'gemini' && (
                 <>
-                  <option value="gemini-2.5-flash" />
-                  <option value="gemini-2.5-pro" />
-                  <option value="gemini-1.5-flash" />
-                  <option value="gemini-1.5-pro" />
+                  <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+                  <option value="gemini-2.5-pro">gemini-2.5-pro</option>
+                  <option value="gemini-1.5-flash">gemini-1.5-flash</option>
+                  <option value="gemini-1.5-pro">gemini-1.5-pro</option>
                 </>
               )}
               {aiProvider === 'ollama' && (
                 <>
                   {localOllamaModels.length > 0 ? (
                     localOllamaModels.map(model => (
-                      <option key={model} value={model} />
+                      <option key={model} value={model}>{model}</option>
                     ))
                   ) : (
                     <>
-                      <option value="llama3.2" />
-                      <option value="llama3.1" />
-                      <option value="mistral" />
-                      <option value="qwen2.5-coder" />
-                      <option value="deepseek-coder" />
+                      <option value="llama3.2">llama3.2</option>
+                      <option value="llama3.1">llama3.1</option>
+                      <option value="mistral">mistral</option>
+                      <option value="qwen2.5-coder">qwen2.5-coder</option>
+                      <option value="deepseek-coder">deepseek-coder</option>
                     </>
                   )}
                 </>
               )}
-            </datalist>
+            </select>
           </div>
 
           {aiProvider !== 'ollama' && (
