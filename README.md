@@ -9,8 +9,6 @@
     <a href="https://github.com/vinzify/gitpop/blob/main/LICENSE"><img src="https://img.shields.io/github/license/vinzify/gitpop?style=flat-square" alt="License: MIT"></a>
     <a href="https://github.com/vinzify/gitpop/stargazers"><img src="https://img.shields.io/github/stars/vinzify/gitpop?style=social" alt="GitHub stars"></a>
   </p>
-  
-  <img src="https://raw.githubusercontent.com/vinzify/gitpop/main/screenshot.png" width="800" alt="GitPop Interface" />
 </div>
 GitPop transforms your Windows File Explorer right-click menu into a powerful, intelligent source control extension. It bridges the gap between terminal commands and heavy GUI clients by offering a fast, sleek contextual popup mirroring VS Code's source control tab.
 
