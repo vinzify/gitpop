@@ -34,6 +34,6 @@ jobs:
         with:
           tagName: GitPop v__VERSION__ # Automatically uses the version from package.json
           releaseName: 'GitPop v__VERSION__'
-          releaseBody: 'See the assets to download and install this version of GitPop.'
+          releaseBody: "## What's Changed\nSee the commits below for details on this release.\n\n### 📦 Installation\n**Windows users:** Download `GitPop_v__VERSION___x64_en-US.msi` from the assets below, run it, and then launch GitPop from your Start Menu to install the context menu extension."
           releaseDraft: true
           prerelease: false
