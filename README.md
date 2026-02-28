@@ -43,12 +43,12 @@ If you want to ensure your proprietary code never leaves your machine:
 2. Run `ollama pull llama3.2` (or your preferred code model) in your terminal.
 3. Ensure Ollama is running (`localhost:11434`), stage your files in GitPop, and click **Sparkle**.
 
-#### Option 2: Cloud AI (OpenAI & Google Gemini)
-You can directly hook into powerful proprietary cloud models.
-1. Select **OpenAI** or **Google Gemini** in the GitPop settings.
-2. Enter the Model Name (e.g., `gpt-4o` or `gemini-1.5-flash`).
-3. Paste in your respective API Key.
-*(Your keys are securely stored locally on your machine via Tauri Store).*
+#### Option 2: Cloud & Custom AI Models
+GitPop natively supports major proprietary cloud providers and **any OpenAI-compatible API**.
+1. Select **OpenAI**, **Google Gemini**, **Anthropic Claude**, or **Custom** in the GitPop settings.
+2. Enter your desired Model Name (e.g., `gpt-4o`, `gemini-1.5-flash`, `claude-3-5-sonnet`, or any local/custom ID).
+3. Provide your API Key (and API Base URL if using Custom mode).
+*(Your configuration and keys are securely stored entirely locally on your machine).*
 
 ## 🛠️ Development
 
