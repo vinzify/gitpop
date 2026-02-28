@@ -21,6 +21,12 @@ function App() {
   const [repoPath, setRepoPath] = useState<string>(".");
   const [error, setError] = useState<string | null>(null);
   const [setupMessage, setSetupMessage] = useState<{ text: string, isError: boolean } | null>(null);
+  const [toast, setToast] = useState<{ message: string, type: 'error' | 'info' } | null>(null);
+
+  const showToast = (message: string, type: 'error' | 'info' = 'error') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 4000);
+  };
 
   // Settings State
   const [aiProvider, setAiProvider] = useState("ollama");
@@ -104,7 +110,7 @@ function App() {
 
   const handleSparkle = async () => {
     if (files.filter(f => f.staged).length === 0) {
-      alert("Please stage at least one file to generate a commit message.");
+      showToast("Please stage at least one file to generate a commit message.", "info");
       return;
     }
 
@@ -116,7 +122,7 @@ function App() {
       setCommitMessage(aiResponse);
     } catch (err) {
       console.error("AI Generation failed:", err);
-      alert(String(err));
+      showToast(String(err));
     } finally {
       setIsSparkling(false);
     }
@@ -137,7 +143,7 @@ function App() {
         finalMessage = await invoke("generate_ai_commit", { diff, config });
         setCommitMessage(finalMessage);
       } catch (err) {
-        alert(`Error auto - generating commit: ${err} `);
+        showToast(`Error auto-generating commit: ${err}`);
         setIsCommitting(false);
         return;
       }
@@ -153,7 +159,7 @@ function App() {
       setCommitMessage("");
       await fetchStatus();
     } catch (err) {
-      alert(`Commit failed: ${err} `);
+      showToast(`Commit failed: ${err}`);
     } finally {
       setIsCommitting(false);
     }
@@ -191,7 +197,7 @@ function App() {
       await store.save();
       setIsSettingsMode(false);
     } catch (err) {
-      alert("Failed to save settings: " + err);
+      showToast("Failed to save settings: " + err);
     }
   };
 
@@ -397,6 +403,13 @@ function App() {
 
       {/* Main Content */}
       <div className="content">
+        {toast && (
+          <div className={`toast toast-${toast.type}`}>
+            <span>{toast.message}</span>
+            <button className="toast-close" onClick={() => setToast(null)}>✕</button>
+          </div>
+        )}
+
         {error && <div style={{ color: 'var(--color-deleted)', fontSize: '12px', padding: '8px', background: 'rgba(255,0,0,0.1)', borderRadius: '4px', wordBreak: 'break-word', overflow: 'hidden' }}>{error}</div>}
 
         <textarea
@@ -415,7 +428,16 @@ function App() {
 
         <div className="files-section">
           <div className="section-header">
-            <span>Changes ({files.length})</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span>Changes ({files.length})</span>
+              <button className="btn-refresh" onClick={() => fetchStatus()} title="Refresh">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="23 4 23 10 17 10"></polyline>
+                  <polyline points="1 20 1 14 7 14"></polyline>
+                  <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                </svg>
+              </button>
+            </div>
             <span style={{ cursor: 'pointer', opacity: 0.8 }} onClick={toggleAll}>
               {files.length > 0 && files.every(f => f.staged) ? 'Unstage All' : 'Stage All'}
             </span>
