@@ -385,10 +385,26 @@ textarea.commit-msg::placeholder {
   flex: 1;
 }
 
-.setup-icon {
-  font-size: 48px;
+.setup-icon-img {
+  width: 96px;
+  height: 96px;
   margin-bottom: 16px;
-  animation: pulse 2s infinite alternate;
+  filter: drop-shadow(0 0 15px rgba(255, 255, 255, 0.4));
+  animation: float 4s ease-in-out infinite;
+}
+
+@keyframes float {
+  0% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-10px);
+  }
+
+  100% {
+    transform: translateY(0);
+  }
 }
 
 .setup-content h2 {

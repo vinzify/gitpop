@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://raw.githubusercontent.com/vinzify/gitpop/main/src-tauri/icons/128x128.png" width="128" />
+  <img src="https://raw.githubusercontent.com/vinzify/gitpop/main/hero-logotype.png" width="300" />
   <h1>GitPop</h1>
   <p><strong>A blazing fast, AI-powered Git commit extension for the Windows Context Menu.</strong></p>
 </div>

@@ -184,7 +184,7 @@ function App() {
           </button>
         </div>
         <div className="setup-content">
-          <div className="setup-icon">✨</div>
+          <img src="/logo.png" className="setup-icon-img" alt="GitPop Logo" />
           <h2>Welcome to GitPop</h2>
           <p>You can add GitPop directly to your Windows right-click menu to instantly commit and push from any directory.</p>
 
