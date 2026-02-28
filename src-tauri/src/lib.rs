@@ -23,6 +23,13 @@ pub struct GitFileStatus {
     staged: bool,
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct AiConfig {
+    provider: String, // "ollama", "openai", "gemini"
+    api_key: Option<String>,
+    model: String,
+}
+
 #[tauri::command]
 fn get_git_status(path: &str) -> Result<Vec<GitFileStatus>, String> {
     let output = Command::new("git")
@@ -120,7 +127,7 @@ fn commit_changes(path: &str, message: &str, files: Vec<String>) -> Result<(), S
 }
 
 #[tauri::command]
-async fn generate_ai_commit(diff: String, model: String) -> Result<String, String> {
+async fn generate_ai_commit(diff: String, config: AiConfig) -> Result<String, String> {
     let prompt = format!(
         "You are an expert developer. Generate a concise, conventional commit message for the following git diff. Return ONLY the commit message (in the format '<type>: <subject>') without any markdown ticks, extra explanations, or quotes.\n\nDiff:\n{}", 
         diff
@@ -130,27 +137,100 @@ async fn generate_ai_commit(diff: String, model: String) -> Result<String, Strin
         .timeout(std::time::Duration::from_secs(45))
         .build()
         .map_err(|e| e.to_string())?;
-    let req_body = OllamaRequest {
-        model,
-        prompt,
-        stream: false,
-    };
+        
+    match config.provider.as_str() {
+        "ollama" => {
+            let req_body = OllamaRequest {
+                model: config.model,
+                prompt,
+                stream: false,
+            };
 
-    let res = client.post("http://localhost:11434/api/generate")
-        .json(&req_body)
-        .send()
-        .await
-        .map_err(|e| format!("Failed to connect to local Ollama (is it running on port 11434?): {}", e))?;
+            let res = client.post("http://localhost:11434/api/generate")
+                .json(&req_body)
+                .send()
+                .await
+                .map_err(|e| format!("Failed to connect to local Ollama (is it running on port 11434?): {}", e))?;
 
-    if !res.status().is_success() {
-        return Err(format!("Ollama API error: {}", res.status()));
+            if !res.status().is_success() {
+                return Err(format!("Ollama API error: {}", res.status()));
+            }
+
+            let parsed: OllamaResponse = res.json()
+                .await
+                .map_err(|e| format!("Failed to parse Ollama response: {}", e))?;
+
+            Ok(parsed.response.trim().to_string())
+        }
+        "openai" => {
+            let res = client.post("https://api.openai.com/v1/chat/completions")
+                .bearer_auth(config.api_key.unwrap_or_default())
+                .json(&serde_json::json!({
+                    "model": config.model,
+                    "messages": [{"role": "user", "content": prompt}]
+                }))
+                .send()
+                .await
+                .map_err(|e| format!("Failed to connect to OpenAI: {}", e))?;
+                
+            if !res.status().is_success() {
+                let error_text = res.text().await.unwrap_or_default();
+                return Err(format!("OpenAI API error: {} {}", error_text, "Check your API key."));
+            }
+
+            let parsed: serde_json::Value = res.json()
+                .await
+                .map_err(|e| format!("Failed to parse OpenAI response: {}", e))?;
+                
+            if let Some(choices) = parsed.get("choices") {
+                if let Some(first_choice) = choices.get(0) {
+                    if let Some(message) = first_choice.get("message") {
+                        if let Some(content) = message.get("content") {
+                            return Ok(content.as_str().unwrap_or_default().trim().to_string());
+                        }
+                    }
+                }
+            }
+            Err("Unexpected response structure from OpenAI".to_string())
+        }
+        "gemini" => {
+            let url = format!("https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}", 
+                config.model, config.api_key.unwrap_or_default());
+            
+            let res = client.post(&url)
+                .json(&serde_json::json!({
+                    "contents": [{"parts": [{"text": prompt}]}]
+                }))
+                .send()
+                .await
+                .map_err(|e| format!("Failed to connect to Gemini: {}", e))?;
+
+            if !res.status().is_success() {
+                let error_text = res.text().await.unwrap_or_default();
+                return Err(format!("Gemini API error: {} {}", error_text, "Check your API key."));
+            }
+
+            let parsed: serde_json::Value = res.json()
+                .await
+                .map_err(|e| format!("Failed to parse Gemini response: {}", e))?;
+                
+             if let Some(candidates) = parsed.get("candidates") {
+                if let Some(first_candidate) = candidates.get(0) {
+                    if let Some(content) = first_candidate.get("content") {
+                        if let Some(parts) = content.get("parts") {
+                            if let Some(first_part) = parts.get(0) {
+                                if let Some(text) = first_part.get("text") {
+                                    return Ok(text.as_str().unwrap_or_default().trim().to_string());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Err("Unexpected response structure from Gemini".to_string())
+        }
+        _ => Err("Unknown AI provider".to_string()),
     }
-
-    let parsed: OllamaResponse = res.json()
-        .await
-        .map_err(|e| format!("Failed to parse Ollama response: {}", e))?;
-
-    Ok(parsed.response.trim().to_string())
 }
 
 #[tauri::command]
@@ -209,6 +289,7 @@ fn uninstall_context_menu() -> Result<(), String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             get_git_status,

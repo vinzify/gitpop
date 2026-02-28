@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { load } from '@tauri-apps/plugin-store';
 import "./App.css";
 
 type FileStatus = {
@@ -13,14 +14,29 @@ function App() {
   const [commitMessage, setCommitMessage] = useState("");
   const [isSparkling, setIsSparkling] = useState(false);
   const [isSetupMode, setIsSetupMode] = useState(false);
+  const [isSettingsMode, setIsSettingsMode] = useState(false);
   const [isCommitting, setIsCommitting] = useState(false);
   const [files, setFiles] = useState<FileStatus[]>([]);
   const [repoPath, setRepoPath] = useState<string>(".");
   const [error, setError] = useState<string | null>(null);
 
+  // Settings State
+  const [aiProvider, setAiProvider] = useState("ollama");
+  const [aiModel, setAiModel] = useState("llama3.2");
+  const [apiKey, setApiKey] = useState("");
+
   useEffect(() => {
     async function init() {
       try {
+        const store = await load('settings.json', { autoSave: false, defaults: {} });
+        const savedProvider = await store.get<{ value: string }>('aiProvider');
+        const savedModel = await store.get<{ value: string }>('aiModel');
+        const savedApiKey = await store.get<{ value: string }>('apiKey');
+
+        if (savedProvider) setAiProvider(savedProvider as unknown as string);
+        if (savedModel) setAiModel(savedModel as unknown as string);
+        if (savedApiKey) setApiKey(savedApiKey as unknown as string);
+
         const dir: string = await invoke("get_startup_dir");
         setRepoPath(dir);
         await fetchStatus(dir);
@@ -68,23 +84,19 @@ function App() {
 
   const handleSparkle = async () => {
     if (files.filter(f => f.staged).length === 0) {
-      alert("Please stage some files before sparking an AI commit.");
+      alert("Please stage at least one file to generate a commit message.");
       return;
     }
 
     setIsSparkling(true);
     try {
-      // Get the diff for staged files
       const diff: string = await invoke("get_git_diff", { path: repoPath });
-      console.log("Diff length: ", diff.length);
-
-      const generatedMsg: string = await invoke("generate_ai_commit", {
-        diff,
-        model: "llama3.2" // or a default local model
-      });
-      setCommitMessage(generatedMsg);
+      const config = { provider: aiProvider, api_key: apiKey, model: aiModel };
+      const aiResponse: string = await invoke("generate_ai_commit", { diff, config });
+      setCommitMessage(aiResponse);
     } catch (err) {
-      alert(`Error generating commit: ${err}`);
+      console.error("AI Generation failed:", err);
+      alert(String(err));
     } finally {
       setIsSparkling(false);
     }
@@ -101,10 +113,8 @@ function App() {
       setIsCommitting(true);
       try {
         const diff: string = await invoke("get_git_diff", { path: repoPath });
-        finalMessage = await invoke("generate_ai_commit", {
-          diff,
-          model: "llama3.2"
-        });
+        const config = { provider: aiProvider, api_key: apiKey, model: aiModel };
+        finalMessage = await invoke("generate_ai_commit", { diff, config });
         setCommitMessage(finalMessage);
       } catch (err) {
         alert(`Error auto-generating commit: ${err}`);
@@ -146,6 +156,19 @@ function App() {
     }
   };
 
+  const saveSettings = async () => {
+    try {
+      const store = await load('settings.json', { autoSave: false, defaults: {} });
+      await store.set('aiProvider', aiProvider);
+      await store.set('aiModel', aiModel);
+      await store.set('apiKey', apiKey);
+      await store.save();
+      setIsSettingsMode(false);
+    } catch (err) {
+      alert("Failed to save settings: " + err);
+    }
+  };
+
   if (isSetupMode) {
     return (
       <div className="app-container setup-container">
@@ -180,6 +203,67 @@ function App() {
     );
   }
 
+  if (isSettingsMode) {
+    return (
+      <div className="app-container setup-container">
+        <div className="titlebar" data-tauri-drag-region>
+          <div className="titlebar-left">
+            <span>GitPop Settings</span>
+          </div>
+          <button className="titlebar-close" onClick={() => setIsSettingsMode(false)}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+
+        <div className="setup-content settings-content" style={{ alignItems: 'flex-start', textAlign: 'left' }}>
+          <h2>AI Provider Settings</h2>
+
+          <div className="settings-group">
+            <label>Provider</label>
+            <select value={aiProvider} onChange={(e) => setAiProvider(e.target.value)} className="settings-input">
+              <option value="ollama">Local Ollama</option>
+              <option value="openai">OpenAI</option>
+              <option value="gemini">Google Gemini</option>
+            </select>
+          </div>
+
+          <div className="settings-group">
+            <label>Model Name</label>
+            <input
+              type="text"
+              value={aiModel}
+              onChange={(e) => setAiModel(e.target.value)}
+              placeholder={aiProvider === 'ollama' ? 'llama3.2' : aiProvider === 'openai' ? 'gpt-4o' : 'gemini-1.5-flash'}
+              className="settings-input"
+            />
+          </div>
+
+          {aiProvider !== 'ollama' && (
+            <div className="settings-group">
+              <label>API Key</label>
+              <input
+                type="password"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                placeholder="sk-..."
+                className="settings-input"
+              />
+            </div>
+          )}
+
+          <div className="setup-actions" style={{ marginTop: 'auto', marginBottom: 0 }}>
+            <button className="btn-primary" onClick={saveSettings}>
+              Save Settings
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="app-container">
       {/* Titlebar */}
@@ -188,12 +272,20 @@ function App() {
           <span>GitPop</span>
           <span className="repo-name">{repoPath.split(/[\\/]/).pop() || "repo"}</span>
         </div>
-        <button className="titlebar-close" onClick={handleClose}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
-          </svg>
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <button className="titlebar-close" style={{ opacity: 0.7 }} onClick={() => setIsSettingsMode(true)} title="Settings">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+          </button>
+          <button className="titlebar-close" onClick={handleClose}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* Main Content */}

@@ -24,12 +24,25 @@ GitPop features a built-in one-click setup. No administrator prompts or shell sc
 
 *(You can remove it at any time by opening GitPop from the Start Menu and clicking "Remove from Context Menu").*
 
-## 🤖 Using the AI Sparkle Feature
+## 🤖 AI Commit Generation
 
-GitPop communicates with Ollama locally to generate smart commits based on your `git diff`.
+GitPop features robust, intelligent commit message auto-generation capabilities. It supports both local and cloud AI models.
+
+### ⚙️ Configuring Your AI Provider
+Click the **Settings** (gear) icon in the top right of the application to choose your AI engine.
+
+#### Option 1: Local Ollama (Default & Most Secure)
+If you want to ensure your proprietary code never leaves your machine:
 1. Download [Ollama](https://ollama.com/).
-2. Run `ollama pull llama3.2` in your terminal.
-3. Ensure Ollama is running (`localhost:11434`), stage your files in GitPop, and click the **Sparkle** icon.
+2. Run `ollama pull llama3.2` (or your preferred code model) in your terminal.
+3. Ensure Ollama is running (`localhost:11434`), stage your files in GitPop, and click **Sparkle**.
+
+#### Option 2: Cloud AI (OpenAI & Google Gemini)
+You can directly hook into powerful proprietary cloud models.
+1. Select **OpenAI** or **Google Gemini** in the GitPop settings.
+2. Enter the Model Name (e.g., `gpt-4o` or `gemini-1.5-flash`).
+3. Paste in your respective API Key.
+*(Your keys are securely stored locally on your machine via Tauri Store).*
 
 ## 🛠️ Development
 

@@ -438,3 +438,44 @@ textarea.commit-msg::placeholder {
   margin-top: 32px !important;
   opacity: 0.6;
 }
+
+/* Settings UI */
+.settings-content {
+  padding: 24px;
+}
+
+.settings-group {
+  width: 100%;
+  margin-bottom: 20px;
+}
+
+.settings-group label {
+  display: block;
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.settings-input {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-size: 14px;
+  outline: none;
+  transition: all 0.2s;
+  box-sizing: border-box;
+}
+
+.settings-input:focus {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.settings-input option {
+  background: var(--bg-color);
+  color: var(--text-primary);
+}

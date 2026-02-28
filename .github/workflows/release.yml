@@ -1,0 +1,37 @@
+name: Release GitPop
+on:
+  push:
+    tags:
+      - 'v*' # Triggers workflow when you push a tag like "v1.0.0"
+
+jobs:
+  publish:
+    runs-on: windows-latest # We only need Windows for GitPop
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Install web dependencies
+        run: npm install
+
+      - name: Build and Publish Tauri App
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: GitPop v__VERSION__ # Automatically uses the version from package.json
+          releaseName: 'GitPop v__VERSION__'
+          releaseBody: 'See the assets to download and install this version of GitPop.'
+          releaseDraft: true
+          prerelease: false
