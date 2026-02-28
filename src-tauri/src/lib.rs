@@ -4,6 +4,19 @@ use reqwest::Client;
 use winreg::enums::*;
 use winreg::RegKey;
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+fn build_hidden_cmd(program: &str) -> Command {
+    let mut cmd = Command::new(program);
+    #[cfg(target_os = "windows")]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+    cmd
+}
+
 #[derive(Serialize, Deserialize)]
 struct OllamaRequest {
     model: String,
@@ -43,7 +56,7 @@ pub struct AiConfig {
 
 #[tauri::command]
 fn get_git_status(path: &str) -> Result<Vec<GitFileStatus>, String> {
-    let output = Command::new("git")
+    let output = build_hidden_cmd("git")
         .current_dir(path)
         .args(["status", "--porcelain"])
         .output()
@@ -82,13 +95,13 @@ fn get_git_status(path: &str) -> Result<Vec<GitFileStatus>, String> {
 
 #[tauri::command]
 fn get_git_diff(path: &str) -> Result<String, String> {
-    let output = Command::new("git")
+    let output = build_hidden_cmd("git")
         .current_dir(path)
         .args(["diff"])
         .output()
         .map_err(|e| e.to_string())?;
 
-    let staged_output = Command::new("git")
+    let staged_output = build_hidden_cmd("git")
         .current_dir(path)
         .args(["diff", "--cached"])
         .output()
@@ -107,14 +120,14 @@ fn get_git_diff(path: &str) -> Result<String, String> {
 #[tauri::command]
 fn commit_changes(path: &str, message: &str, files: Vec<String>) -> Result<(), String> {
     // Unstage everything first to match our UI state
-    let _ = Command::new("git")
+    let _ = build_hidden_cmd("git")
         .current_dir(path)
         .args(["restore", "--staged", "."])
         .output();
 
     // Stage selected files
     for file in files {
-        let out = Command::new("git")
+        let out = build_hidden_cmd("git")
             .current_dir(path)
             .args(["add", &file])
             .output()
@@ -125,7 +138,7 @@ fn commit_changes(path: &str, message: &str, files: Vec<String>) -> Result<(), S
     }
 
     // Commit
-    let commit_out = Command::new("git")
+    let commit_out = build_hidden_cmd("git")
         .current_dir(path)
         .args(["commit", "-m", message])
         .output()
@@ -318,7 +331,7 @@ async fn generate_ai_commit(diff: String, config: AiConfig) -> Result<String, St
 
 #[tauri::command]
 async fn get_ollama_models() -> Result<Vec<String>, String> {
-    let output = std::process::Command::new("ollama")
+    let output = build_hidden_cmd("ollama")
         .arg("list")
         .output()
         .map_err(|e| format!("Failed to execute 'ollama list': {}", e))?;
