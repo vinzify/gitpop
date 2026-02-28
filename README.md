@@ -6,7 +6,7 @@
   <p>
     <a href="https://github.com/vinzify/gitpop/releases"><img src="https://img.shields.io/github/v/release/vinzify/gitpop?style=flat-square&color=blue" alt="Current Release"></a>
     <a href="https://tauri.app/"><img src="https://img.shields.io/badge/Built_with-Tauri_%7C_Rust-orange?style=flat-square" alt="Built with Tauri & Rust"></a>
-    <a href="https://github.com/vinzify/gitpop/blob/main/LICENSE"><img src="https://img.shields.io/github/license/vinzify/gitpop?style=flat-square" alt="License: MIT"></a>
+    <a href="https://github.com/vinzify/gitpop/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=flat-square" alt="License: MIT"></a>
     <a href="https://github.com/vinzify/gitpop/stargazers"><img src="https://img.shields.io/github/stars/vinzify/gitpop?style=social" alt="GitHub stars"></a>
   </p>
 </div>
