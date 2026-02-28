@@ -55,6 +55,9 @@ function App() {
         }
       } catch (err) {
         console.error(err);
+        setError(`Fatal Initialization Error: ${err}`);
+      } finally {
+        await getCurrentWindow().show();
       }
     }
     init();
@@ -74,8 +77,6 @@ function App() {
       } else {
         setError(errMsg);
       }
-    } finally {
-      getCurrentWindow().show();
     }
   };
 
@@ -396,7 +397,7 @@ function App() {
 
       {/* Main Content */}
       <div className="content">
-        {error && <div style={{ color: 'var(--color-deleted)', fontSize: '12px', padding: '8px', background: 'rgba(255,0,0,0.1)', borderRadius: '4px' }}>{error}</div>}
+        {error && <div style={{ color: 'var(--color-deleted)', fontSize: '12px', padding: '8px', background: 'rgba(255,0,0,0.1)', borderRadius: '4px', wordBreak: 'break-word', overflow: 'hidden' }}>{error}</div>}
 
         <textarea
           className="commit-msg"
