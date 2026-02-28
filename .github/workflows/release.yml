@@ -6,6 +6,8 @@ on:
 
 jobs:
   publish:
+    permissions:
+      contents: write
     runs-on: windows-latest # We only need Windows for GitPop
 
     steps:
