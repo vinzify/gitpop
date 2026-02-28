@@ -92,8 +92,7 @@ fn commit_changes(path: &str, message: &str, files: Vec<String>) -> Result<(), S
     let _ = Command::new("git")
         .current_dir(path)
         .args(["restore", "--staged", "."])
-        .output()
-        .map_err(|e| e.to_string())?;
+        .output();
 
     // Stage selected files
     for file in files {
@@ -127,7 +126,10 @@ async fn generate_ai_commit(diff: String, model: String) -> Result<String, Strin
         diff
     );
 
-    let client = Client::new();
+    let client = Client::builder()
+        .timeout(std::time::Duration::from_secs(45))
+        .build()
+        .map_err(|e| e.to_string())?;
     let req_body = OllamaRequest {
         model,
         prompt,
@@ -155,7 +157,11 @@ async fn generate_ai_commit(diff: String, model: String) -> Result<String, Strin
 fn get_startup_dir() -> Result<String, String> {
     let args: Vec<String> = std::env::args().collect();
     if args.len() > 1 {
-        Ok(args[1].clone())
+        let mut path = args[1].clone();
+        if path.ends_with('"') {
+            path.pop();
+        }
+        Ok(path)
     } else {
         std::env::current_dir()
             .map(|p| p.to_string_lossy().into_owned())

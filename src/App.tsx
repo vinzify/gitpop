@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
-// import { getCurrentWindow } from '@tauri-apps/api/window';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import "./App.css";
 
 type FileStatus = {
@@ -91,15 +91,33 @@ function App() {
   };
 
   const handleCommit = async () => {
-    if (!commitMessage.trim()) return;
     const stagedFiles = files.filter(f => f.staged).map(f => f.path);
     if (stagedFiles.length === 0) return;
+
+    let finalMessage = commitMessage.trim();
+
+    // If empty input, auto-generate first
+    if (!finalMessage) {
+      setIsCommitting(true);
+      try {
+        const diff: string = await invoke("get_git_diff", { path: repoPath });
+        finalMessage = await invoke("generate_ai_commit", {
+          diff,
+          model: "llama3.2"
+        });
+        setCommitMessage(finalMessage);
+      } catch (err) {
+        alert(`Error auto-generating commit: ${err}`);
+        setIsCommitting(false);
+        return;
+      }
+    }
 
     setIsCommitting(true);
     try {
       await invoke("commit_changes", {
         path: repoPath,
-        message: commitMessage,
+        message: finalMessage,
         files: stagedFiles
       });
       setCommitMessage("");
@@ -121,8 +139,11 @@ function App() {
   };
 
   const handleClose = async () => {
-    // const appWindow = getCurrentWindow();
-    // await appWindow.close();
+    try {
+      await getCurrentWindow().close();
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   if (isSetupMode) {
@@ -231,7 +252,7 @@ function App() {
 
       {/* Action Bar */}
       <div className="action-bar">
-        <button className="btn-primary" onClick={handleCommit} disabled={isCommitting || !commitMessage.trim()}>
+        <button className="btn-primary" onClick={handleCommit} disabled={isCommitting}>
           {isCommitting ? 'Committing...' : 'Commit'}
         </button>
         <button className="btn-icon" title="Commit & Push">
