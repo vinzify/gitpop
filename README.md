@@ -24,8 +24,9 @@ GitPop transforms your Windows File Explorer right-click menu into a powerful, i
 GitPop features a built-in one-click setup. No administrator prompts or shell scripts required!
 
 1. **Download** the latest installer (`.msi` or `.exe`) from the [Releases page](https://github.com/vinzify/gitpop/releases).
-2. **Launch** `GitPop` from your Start Menu.
-3. Click **"Add to Right-Click Menu"**.
+2. **Launch** the downloaded installer.
+   * *Note: If you see a blue "Windows protected your PC" screen, it's because GitPop is new and unsigned. Click **More info** followed by **Run anyway**.*
+3. Launch `GitPop` from your Start Menu.
 4. You're done! Right-click any folder or empty space inside a `.git` repository and enjoy.
 
 *(You can remove it at any time by opening GitPop from the Start Menu and clicking "Remove from Context Menu").*
