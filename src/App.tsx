@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { exit } from "@tauri-apps/plugin-process";
 import { load } from '@tauri-apps/plugin-store';
 import "./App.css";
 
@@ -19,11 +20,13 @@ function App() {
   const [files, setFiles] = useState<FileStatus[]>([]);
   const [repoPath, setRepoPath] = useState<string>(".");
   const [error, setError] = useState<string | null>(null);
+  const [setupMessage, setSetupMessage] = useState<{ text: string, isError: boolean } | null>(null);
 
   // Settings State
   const [aiProvider, setAiProvider] = useState("ollama");
   const [aiModel, setAiModel] = useState("llama3.2");
   const [apiKey, setApiKey] = useState("");
+  const [localOllamaModels, setLocalOllamaModels] = useState<string[]>([]);
 
   useEffect(() => {
     async function init() {
@@ -40,6 +43,13 @@ function App() {
         const dir: string = await invoke("get_startup_dir");
         setRepoPath(dir);
         await fetchStatus(dir);
+
+        try {
+          const models: string[] = await invoke("get_ollama_models");
+          setLocalOllamaModels(models);
+        } catch (ollamaErr) {
+          console.warn("Could not fetch local Ollama models:", ollamaErr);
+        }
       } catch (err) {
         console.error(err);
       }
@@ -67,18 +77,22 @@ function App() {
   const handleInstallMenu = async () => {
     try {
       await invoke("install_context_menu");
-      alert("Successfully added GitPop to your right-click menu!");
+      setSetupMessage({ text: "Successfully added GitPop to your right-click menu!", isError: false });
+      setTimeout(() => setSetupMessage(null), 3000);
     } catch (err) {
-      alert("Failed to install: " + err);
+      setSetupMessage({ text: "Failed to install: " + err, isError: true });
+      setTimeout(() => setSetupMessage(null), 3000);
     }
   };
 
   const handleUninstallMenu = async () => {
     try {
       await invoke("uninstall_context_menu");
-      alert("Removed GitPop from your right-click menu.");
+      setSetupMessage({ text: "Removed GitPop from your right-click menu.", isError: false });
+      setTimeout(() => setSetupMessage(null), 3000);
     } catch (err) {
-      alert("Failed to uninstall: " + err);
+      setSetupMessage({ text: "Failed to uninstall: " + err, isError: true });
+      setTimeout(() => setSetupMessage(null), 3000);
     }
   };
 
@@ -117,7 +131,7 @@ function App() {
         finalMessage = await invoke("generate_ai_commit", { diff, config });
         setCommitMessage(finalMessage);
       } catch (err) {
-        alert(`Error auto-generating commit: ${err}`);
+        alert(`Error auto - generating commit: ${err} `);
         setIsCommitting(false);
         return;
       }
@@ -133,7 +147,7 @@ function App() {
       setCommitMessage("");
       await fetchStatus();
     } catch (err) {
-      alert(`Commit failed: ${err}`);
+      alert(`Commit failed: ${err} `);
     } finally {
       setIsCommitting(false);
     }
@@ -150,9 +164,14 @@ function App() {
 
   const handleClose = async () => {
     try {
-      await getCurrentWindow().close();
+      await exit(0);
     } catch (err) {
-      console.error(err);
+      console.error("Failed to exit process:", err);
+      try {
+        await getCurrentWindow().close();
+      } catch (e) {
+        console.error("Fallback window close also failed:", e);
+      }
     }
   };
 
@@ -187,6 +206,12 @@ function App() {
           <img src="/logo.png" className="setup-icon-img" alt="GitPop Logo" />
           <h2>Welcome to GitPop</h2>
           <p>You can add GitPop directly to your Windows right-click menu to instantly commit and push from any directory.</p>
+
+          {setupMessage && (
+            <div style={{ color: setupMessage.isError ? 'var(--color-deleted)' : 'var(--color-added)', padding: '8px 12px', background: 'rgba(255,255,255,0.05)', borderRadius: '6px', marginBottom: '16px', fontSize: '13px' }}>
+              {setupMessage.text}
+            </div>
+          )}
 
           <div className="setup-actions">
             <button className="btn-primary" onClick={handleInstallMenu}>
@@ -234,11 +259,49 @@ function App() {
             <label>Model Name</label>
             <input
               type="text"
+              list="model-suggestions"
               value={aiModel}
               onChange={(e) => setAiModel(e.target.value)}
               placeholder={aiProvider === 'ollama' ? 'llama3.2' : aiProvider === 'openai' ? 'gpt-4o' : 'gemini-1.5-flash'}
               className="settings-input"
             />
+            <datalist id="model-suggestions">
+              {aiProvider === 'openai' && (
+                <>
+                  <option value="gpt-4o" />
+                  <option value="gpt-4o-mini" />
+                  <option value="gpt-4-turbo" />
+                  <option value="o1-preview" />
+                  <option value="o1-mini" />
+                  <option value="o3-mini" />
+                </>
+              )}
+              {aiProvider === 'gemini' && (
+                <>
+                  <option value="gemini-2.5-flash" />
+                  <option value="gemini-2.5-pro" />
+                  <option value="gemini-1.5-flash" />
+                  <option value="gemini-1.5-pro" />
+                </>
+              )}
+              {aiProvider === 'ollama' && (
+                <>
+                  {localOllamaModels.length > 0 ? (
+                    localOllamaModels.map(model => (
+                      <option key={model} value={model} />
+                    ))
+                  ) : (
+                    <>
+                      <option value="llama3.2" />
+                      <option value="llama3.1" />
+                      <option value="mistral" />
+                      <option value="qwen2.5-coder" />
+                      <option value="deepseek-coder" />
+                    </>
+                  )}
+                </>
+              )}
+            </datalist>
           </div>
 
           {aiProvider !== 'ollama' && (
@@ -335,7 +398,7 @@ function App() {
                     {file.path.split('/').slice(0, -1).join('/')}
                   </span>
                 </span>
-                <span className={`file-status status-${file.status}`}>{file.status}</span>
+                <span className={`file - status status - ${file.status} `}>{file.status}</span>
               </div>
             ))}
           </div>

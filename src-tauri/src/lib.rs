@@ -17,6 +17,16 @@ struct OllamaResponse {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+pub struct OllamaModel {
+    name: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct OllamaTagsResponse {
+    models: Vec<OllamaModel>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
 pub struct GitFileStatus {
     path: String,
     status: String,
@@ -234,6 +244,29 @@ async fn generate_ai_commit(diff: String, config: AiConfig) -> Result<String, St
 }
 
 #[tauri::command]
+async fn get_ollama_models() -> Result<Vec<String>, String> {
+    let client = Client::builder()
+        .timeout(std::time::Duration::from_secs(5))
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let res = client.get("http://localhost:11434/api/tags")
+        .send()
+        .await
+        .map_err(|e| format!("Failed to connect to local Ollama: {}", e))?;
+
+    if !res.status().is_success() {
+        return Err(format!("Ollama API error: {}", res.status()));
+    }
+
+    let parsed: OllamaTagsResponse = res.json()
+        .await
+        .map_err(|e| format!("Failed to parse Ollama tags response: {}", e))?;
+
+    Ok(parsed.models.into_iter().map(|m| m.name).collect())
+}
+
+#[tauri::command]
 fn get_startup_dir() -> Result<String, String> {
     let args: Vec<String> = std::env::args().collect();
     if args.len() > 1 {
@@ -289,6 +322,7 @@ fn uninstall_context_menu() -> Result<(), String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
@@ -296,6 +330,7 @@ pub fn run() {
             get_git_diff,
             commit_changes,
             generate_ai_commit,
+            get_ollama_models,
             get_startup_dir,
             install_context_menu,
             uninstall_context_menu
