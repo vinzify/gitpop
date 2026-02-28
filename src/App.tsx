@@ -71,6 +71,8 @@ function App() {
       } else {
         setError(errMsg);
       }
+    } finally {
+      getCurrentWindow().show();
     }
   };
 
@@ -263,12 +265,12 @@ function App() {
               className="settings-input"
             >
               {/* Ensure currently selected model is always an option even if custom */}
-              {aiModel && 
-               !(aiProvider === 'openai' && ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "o1-preview", "o1-mini", "o3-mini"].includes(aiModel)) &&
-               !(aiProvider === 'gemini' && ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-1.5-flash", "gemini-1.5-pro"].includes(aiModel)) &&
-               !(aiProvider === 'ollama' && (localOllamaModels.length > 0 ? localOllamaModels.includes(aiModel) : ["llama3.2", "llama3.1", "mistral", "qwen2.5-coder", "deepseek-coder"].includes(aiModel))) && (
-                 <option value={aiModel}>{aiModel} (Custom)</option>
-              )}
+              {aiModel &&
+                !(aiProvider === 'openai' && ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "o1-preview", "o1-mini", "o3-mini"].includes(aiModel)) &&
+                !(aiProvider === 'gemini' && ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-1.5-flash", "gemini-1.5-pro"].includes(aiModel)) &&
+                !(aiProvider === 'ollama' && (localOllamaModels.length > 0 ? localOllamaModels.includes(aiModel) : ["llama3.2", "llama3.1", "mistral", "qwen2.5-coder", "deepseek-coder"].includes(aiModel))) && (
+                  <option value={aiModel}>{aiModel} (Custom)</option>
+                )}
 
               {aiProvider === 'openai' && (
                 <>
