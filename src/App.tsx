@@ -26,6 +26,7 @@ function App() {
   const [aiProvider, setAiProvider] = useState("ollama");
   const [aiModel, setAiModel] = useState("llama3.2");
   const [apiKey, setApiKey] = useState("");
+  const [customApiUrl, setCustomApiUrl] = useState("");
   const [localOllamaModels, setLocalOllamaModels] = useState<string[]>([]);
 
   useEffect(() => {
@@ -35,10 +36,12 @@ function App() {
         const savedProvider = await store.get<{ value: string }>('aiProvider');
         const savedModel = await store.get<{ value: string }>('aiModel');
         const savedApiKey = await store.get<{ value: string }>('apiKey');
+        const savedCustomApiUrl = await store.get<{ value: string }>('customApiUrl');
 
         if (savedProvider) setAiProvider(savedProvider as unknown as string);
         if (savedModel) setAiModel(savedModel as unknown as string);
         if (savedApiKey) setApiKey(savedApiKey as unknown as string);
+        if (savedCustomApiUrl) setCustomApiUrl(savedCustomApiUrl as unknown as string);
 
         const dir: string = await invoke("get_startup_dir");
         setRepoPath(dir);
@@ -107,7 +110,7 @@ function App() {
     setIsSparkling(true);
     try {
       const diff: string = await invoke("get_git_diff", { path: repoPath });
-      const config = { provider: aiProvider, api_key: apiKey, model: aiModel };
+      const config = { provider: aiProvider, api_key: apiKey, model: aiModel, custom_api_url: customApiUrl };
       const aiResponse: string = await invoke("generate_ai_commit", { diff, config });
       setCommitMessage(aiResponse);
     } catch (err) {
@@ -129,7 +132,7 @@ function App() {
       setIsCommitting(true);
       try {
         const diff: string = await invoke("get_git_diff", { path: repoPath });
-        const config = { provider: aiProvider, api_key: apiKey, model: aiModel };
+        const config = { provider: aiProvider, api_key: apiKey, model: aiModel, custom_api_url: customApiUrl };
         finalMessage = await invoke("generate_ai_commit", { diff, config });
         setCommitMessage(finalMessage);
       } catch (err) {
@@ -183,6 +186,7 @@ function App() {
       await store.set('aiProvider', aiProvider);
       await store.set('aiModel', aiModel);
       await store.set('apiKey', apiKey);
+      await store.set('customApiUrl', customApiUrl);
       await store.save();
       setIsSettingsMode(false);
     } catch (err) {
@@ -253,62 +257,95 @@ function App() {
             <select value={aiProvider} onChange={(e) => setAiProvider(e.target.value)} className="settings-input">
               <option value="ollama">Local Ollama</option>
               <option value="openai">OpenAI</option>
+              <option value="anthropic">Anthropic Claude</option>
               <option value="gemini">Google Gemini</option>
+              <option value="custom">Custom (OpenAI Compatible)</option>
             </select>
           </div>
 
           <div className="settings-group">
             <label>Model Name</label>
-            <select
-              value={aiModel}
-              onChange={(e) => setAiModel(e.target.value)}
-              className="settings-input"
-            >
-              {/* Ensure currently selected model is always an option even if custom */}
-              {aiModel &&
-                !(aiProvider === 'openai' && ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "o1-preview", "o1-mini", "o3-mini"].includes(aiModel)) &&
-                !(aiProvider === 'gemini' && ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-1.5-flash", "gemini-1.5-pro"].includes(aiModel)) &&
-                !(aiProvider === 'ollama' && (localOllamaModels.length > 0 ? localOllamaModels.includes(aiModel) : ["llama3.2", "llama3.1", "mistral", "qwen2.5-coder", "deepseek-coder"].includes(aiModel))) && (
-                  <option value={aiModel}>{aiModel} (Custom)</option>
-                )}
-
-              {aiProvider === 'openai' && (
-                <>
-                  <option value="gpt-4o">gpt-4o</option>
-                  <option value="gpt-4o-mini">gpt-4o-mini</option>
-                  <option value="gpt-4-turbo">gpt-4-turbo</option>
-                  <option value="o1-preview">o1-preview</option>
-                  <option value="o1-mini">o1-mini</option>
-                  <option value="o3-mini">o3-mini</option>
-                </>
-              )}
-              {aiProvider === 'gemini' && (
-                <>
-                  <option value="gemini-2.5-flash">gemini-2.5-flash</option>
-                  <option value="gemini-2.5-pro">gemini-2.5-pro</option>
-                  <option value="gemini-1.5-flash">gemini-1.5-flash</option>
-                  <option value="gemini-1.5-pro">gemini-1.5-pro</option>
-                </>
-              )}
-              {aiProvider === 'ollama' && (
-                <>
-                  {localOllamaModels.length > 0 ? (
-                    localOllamaModels.map(model => (
-                      <option key={model} value={model}>{model}</option>
-                    ))
-                  ) : (
-                    <>
-                      <option value="llama3.2">llama3.2</option>
-                      <option value="llama3.1">llama3.1</option>
-                      <option value="mistral">mistral</option>
-                      <option value="qwen2.5-coder">qwen2.5-coder</option>
-                      <option value="deepseek-coder">deepseek-coder</option>
-                    </>
+            {aiProvider === 'custom' ? (
+              <input
+                type="text"
+                value={aiModel}
+                onChange={(e) => setAiModel(e.target.value)}
+                placeholder="e.g. meta-llama-3.1"
+                className="settings-input"
+              />
+            ) : (
+              <select
+                value={aiModel}
+                onChange={(e) => setAiModel(e.target.value)}
+                className="settings-input"
+              >
+                {/* Ensure currently selected model is always an option even if custom */}
+                {aiModel &&
+                  !(aiProvider === 'openai' && ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "o1-preview", "o1-mini", "o3-mini"].includes(aiModel)) &&
+                  !(aiProvider === 'anthropic' && ["claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022", "claude-3-opus-20240229"].includes(aiModel)) &&
+                  !(aiProvider === 'gemini' && ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-1.5-flash", "gemini-1.5-pro"].includes(aiModel)) &&
+                  !(aiProvider === 'ollama' && (localOllamaModels.length > 0 ? localOllamaModels.includes(aiModel) : ["llama3.2", "llama3.1", "mistral", "qwen2.5-coder", "deepseek-coder"].includes(aiModel))) && (
+                    <option value={aiModel}>{aiModel} (Custom)</option>
                   )}
-                </>
-              )}
-            </select>
+
+                {aiProvider === 'openai' && (
+                  <>
+                    <option value="gpt-4o">gpt-4o</option>
+                    <option value="gpt-4o-mini">gpt-4o-mini</option>
+                    <option value="gpt-4-turbo">gpt-4-turbo</option>
+                    <option value="o1-preview">o1-preview</option>
+                    <option value="o1-mini">o1-mini</option>
+                    <option value="o3-mini">o3-mini</option>
+                  </>
+                )}
+                {aiProvider === 'anthropic' && (
+                  <>
+                    <option value="claude-3-5-sonnet-20241022">claude-3-5-sonnet</option>
+                    <option value="claude-3-5-haiku-20241022">claude-3-5-haiku</option>
+                    <option value="claude-3-opus-20240229">claude-3-opus</option>
+                  </>
+                )}
+                {aiProvider === 'gemini' && (
+                  <>
+                    <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+                    <option value="gemini-2.5-pro">gemini-2.5-pro</option>
+                    <option value="gemini-1.5-flash">gemini-1.5-flash</option>
+                    <option value="gemini-1.5-pro">gemini-1.5-pro</option>
+                  </>
+                )}
+                {aiProvider === 'ollama' && (
+                  <>
+                    {localOllamaModels.length > 0 ? (
+                      localOllamaModels.map(model => (
+                        <option key={model} value={model}>{model}</option>
+                      ))
+                    ) : (
+                      <>
+                        <option value="llama3.2">llama3.2</option>
+                        <option value="llama3.1">llama3.1</option>
+                        <option value="mistral">mistral</option>
+                        <option value="qwen2.5-coder">qwen2.5-coder</option>
+                        <option value="deepseek-coder">deepseek-coder</option>
+                      </>
+                    )}
+                  </>
+                )}
+              </select>
+            )}
           </div>
+
+          {aiProvider === 'custom' && (
+            <div className="settings-group">
+              <label>API Base URL</label>
+              <input
+                type="text"
+                value={customApiUrl}
+                onChange={(e) => setCustomApiUrl(e.target.value)}
+                placeholder="https://api.groq.com/openai/v1"
+                className="settings-input"
+              />
+            </div>
+          )}
 
           {aiProvider !== 'ollama' && (
             <div className="settings-group">

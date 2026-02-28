@@ -35,9 +35,10 @@ pub struct GitFileStatus {
 
 #[derive(Serialize, Deserialize)]
 pub struct AiConfig {
-    provider: String, // "ollama", "openai", "gemini"
+    provider: String, // "ollama", "openai", "gemini", "anthropic", "custom"
     api_key: Option<String>,
     model: String,
+    custom_api_url: Option<String>,
 }
 
 #[tauri::command]
@@ -238,6 +239,78 @@ async fn generate_ai_commit(diff: String, config: AiConfig) -> Result<String, St
                 }
             }
             Err("Unexpected response structure from Gemini".to_string())
+        }
+        "anthropic" => {
+            let res = client.post("https://api.anthropic.com/v1/messages")
+                .header("x-api-key", config.api_key.unwrap_or_default())
+                .header("anthropic-version", "2023-06-01")
+                .header("content-type", "application/json")
+                .json(&serde_json::json!({
+                    "model": config.model,
+                    "max_tokens": 1024,
+                    "messages": [{"role": "user", "content": prompt}]
+                }))
+                .send()
+                .await
+                .map_err(|e| format!("Failed to connect to Anthropic: {}", e))?;
+                
+            if !res.status().is_success() {
+                let error_text = res.text().await.unwrap_or_default();
+                return Err(format!("Anthropic API error: {} {}", error_text, "Check your API key."));
+            }
+
+            let parsed: serde_json::Value = res.json()
+                .await
+                .map_err(|e| format!("Failed to parse Anthropic response: {}", e))?;
+                
+            if let Some(content_array) = parsed.get("content") {
+                if let Some(first_content) = content_array.get(0) {
+                    if let Some(text) = first_content.get("text") {
+                        return Ok(text.as_str().unwrap_or_default().trim().to_string());
+                    }
+                }
+            }
+            Err("Unexpected response structure from Anthropic".to_string())
+        }
+        "custom" => {
+            let base_url = config.custom_api_url.unwrap_or_else(|| "https://api.openai.com/v1".to_string());
+            let url = if base_url.ends_with("/chat/completions") {
+                base_url
+            } else if base_url.ends_with('/') {
+                format!("{}chat/completions", base_url)
+            } else {
+                format!("{}/chat/completions", base_url)
+            };
+
+            let res = client.post(&url)
+                .bearer_auth(config.api_key.unwrap_or_default())
+                .json(&serde_json::json!({
+                    "model": config.model,
+                    "messages": [{"role": "user", "content": prompt}]
+                }))
+                .send()
+                .await
+                .map_err(|e| format!("Failed to connect to Custom endpoint: {}", e))?;
+                
+            if !res.status().is_success() {
+                let error_text = res.text().await.unwrap_or_default();
+                return Err(format!("Custom API error: {} {}", error_text, "Check your URL and API key."));
+            }
+
+            let parsed: serde_json::Value = res.json()
+                .await
+                .map_err(|e| format!("Failed to parse Custom endpoint response: {}", e))?;
+                
+            if let Some(choices) = parsed.get("choices") {
+                if let Some(first_choice) = choices.get(0) {
+                    if let Some(message) = first_choice.get("message") {
+                        if let Some(content) = message.get("content") {
+                            return Ok(content.as_str().unwrap_or_default().trim().to_string());
+                        }
+                    }
+                }
+            }
+            Err("Unexpected response structure from Custom endpoint".to_string())
         }
         _ => Err("Unknown AI provider".to_string()),
     }
