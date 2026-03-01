@@ -11,7 +11,7 @@
   </p>
 </div>
 GitPop transforms your Windows File Explorer right-click menu into a powerful, intelligent source control extension. It bridges the gap between terminal commands and heavy GUI clients by offering a fast, sleek contextual popup mirroring VS Code's source control tab.
-
+ 
 ## ✨ Features
 * **Zero-Friction Context Menu:** Right-click anywhere in a Git repository to immediately open GitPop — even from subdirectories.
 * **Commit & Push:** One-click commit, or commit & push in a single action with the ↑ button.
