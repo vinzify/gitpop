@@ -491,6 +491,12 @@ textarea.commit-msg::placeholder {
   opacity: 0.6;
 }
 
+.init-section {
+  width: 100%;
+  max-width: 340px;
+  margin: 0 auto 16px auto;
+}
+
 /* Settings UI */
 .settings-content {
   padding: 24px;

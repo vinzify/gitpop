@@ -21,6 +21,7 @@ GitPop transforms your Windows File Explorer right-click menu into a powerful, i
   * *Local & Private:* Connects locally to [Ollama](https://ollama.com/) (defaults to `llama3.2`) so your proprietary code never leaves your machine.
   * *Cloud Providers:* Native support for OpenAI, Google Gemini, Anthropic Claude, and any OpenAI-compatible API.
 * **Smart Repo Detection:** Opens the setup screen with a friendly message when used outside a Git repository.
+  * *Init & Connect:* Initialize a new repo right from GitPop — optionally paste a remote URL and push when ready.
 * **Premium Aesthetics:** Dark mode, glassmorphism UI overlay right over your File Explorer.
 
 ## 🚀 Installation

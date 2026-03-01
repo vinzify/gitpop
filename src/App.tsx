@@ -31,6 +31,8 @@ function App() {
   const [setupMessage, setSetupMessage] = useState<{ text: string, isError: boolean } | null>(null);
   const [toast, setToast] = useState<{ message: string, type: 'error' | 'info' } | null>(null);
   const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
+  const [remoteUrl, setRemoteUrl] = useState("");
+  const [isInitializing, setIsInitializing] = useState(false);
 
   const showToast = (message: string, type: 'error' | 'info' = 'error') => {
     setToast({ message, type });
@@ -67,7 +69,8 @@ function App() {
           await fetchStatus(rootDir);
           await refreshSyncStatus(rootDir);
         } catch {
-          // Not in a git repo - show setup screen with "not a repo" message
+          // Not in a git repo - save the dir path anyway for potential init
+          setRepoPath(dir);
           setIsNotRepo(true);
           setIsSetupMode(true);
         }
@@ -297,6 +300,48 @@ function App() {
             <p style={{ color: 'var(--color-deleted)' }}>You opened GitPop in a folder that doesn't contain a .git repository.</p>
           ) : (
             <p>You can add GitPop directly to your Windows right-click menu to instantly commit and push from any directory.</p>
+          )}
+
+          {isNotRepo && (
+            <div className="init-section">
+              <div className="settings-group" style={{ textAlign: 'left' }}>
+                <label>Remote URL (optional)</label>
+                <input
+                  type="text"
+                  value={remoteUrl}
+                  onChange={(e) => setRemoteUrl(e.target.value)}
+                  placeholder="https://github.com/user/repo.git"
+                  className="settings-input"
+                />
+              </div>
+              <button
+                className="btn-primary"
+                onClick={async () => {
+                  setIsInitializing(true);
+                  try {
+                    await invoke("init_repo", {
+                      path: repoPath,
+                      remote_url: remoteUrl.trim() || null
+                    });
+                    // After init, reload as a normal repo
+                    setIsNotRepo(false);
+                    setIsSetupMode(false);
+                    await fetchStatus(repoPath);
+                    await refreshSyncStatus(repoPath);
+                    setSetupMessage(null);
+                  } catch (err) {
+                    setSetupMessage({ text: "Init failed: " + err, isError: true });
+                    setTimeout(() => setSetupMessage(null), 5000);
+                  } finally {
+                    setIsInitializing(false);
+                  }
+                }}
+                disabled={isInitializing}
+                style={{ marginBottom: '16px' }}
+              >
+                {isInitializing ? 'Initializing...' : 'Initialize Repository'}
+              </button>
+            </div>
           )}
 
           {setupMessage && (

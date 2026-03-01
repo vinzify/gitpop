@@ -409,6 +409,38 @@ fn uninstall_context_menu() -> Result<(), String> {
 }
 
 #[tauri::command]
+fn init_repo(path: &str, remote_url: Option<String>) -> Result<(), String> {
+    // git init
+    let init_out = build_hidden_cmd("git")
+        .current_dir(path)
+        .args(["init"])
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if !init_out.status.success() {
+        return Err(format!("git init failed: {}", String::from_utf8_lossy(&init_out.stderr)));
+    }
+
+    // Optionally add remote
+    if let Some(url) = remote_url {
+        let trimmed = url.trim();
+        if !trimmed.is_empty() {
+            let remote_out = build_hidden_cmd("git")
+                .current_dir(path)
+                .args(["remote", "add", "origin", trimmed])
+                .output()
+                .map_err(|e| e.to_string())?;
+
+            if !remote_out.status.success() {
+                return Err(format!("git remote add failed: {}", String::from_utf8_lossy(&remote_out.stderr)));
+            }
+        }
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
 fn get_repo_root(path: &str) -> Result<String, String> {
     let output = build_hidden_cmd("git")
         .current_dir(path)
@@ -519,7 +551,8 @@ pub fn run() {
             uninstall_context_menu,
             get_repo_root,
             push_changes,
-            get_sync_status
+            get_sync_status,
+            init_repo
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

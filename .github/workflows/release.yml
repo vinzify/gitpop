@@ -38,13 +38,13 @@ jobs:
             ## What's Changed
 
             ### 🚀 New Features
-            - **Adaptive Push UX**: The ↑ button now intelligently adapts — shows "Commit & Push" when files are staged, "Push ↑N" when commits are unpushed, and "Initial Push" for new branches
-            - **Ahead Badge**: A `↑ N` indicator in the titlebar shows how many commits are ahead of remote at a glance
-            - **Initial Push Support**: New repos and branches without an upstream are handled gracefully with `git push -u origin <branch>`
+            - **Init & Connect**: Open GitPop in any folder — if it's not a Git repo, initialize one right from the UI with an optional remote URL
+            - **Adaptive Push UX**: The ↑ button intelligently adapts — "Commit & Push" with staged files, "Push ↑N" with unpushed commits, or "Initial Push" for new branches
+            - **Ahead Badge**: A `↑ N` indicator in the titlebar shows unpushed commits at a glance
 
             ### 🐛 Bug Fixes
-            - Fixed "stage files first" error when trying to push after committing
-            - Commit button now properly disables when no files are staged
+            - Fixed "stage files first" error when pushing after committing
+            - Commit button properly disables when no files are staged
 
             ### 📦 Installation
             **Windows users:** Download `GitPop___VERSION___x64_en-US.msi` from the assets below, run it, and then launch GitPop from your Start Menu to install the context menu extension.
