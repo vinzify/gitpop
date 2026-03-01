@@ -38,15 +38,13 @@ jobs:
             ## What's Changed
 
             ### 🚀 New Features
-            - **Commit & Push**: The ↑ button now commits and pushes in one action
-            - **Subdirectory Support**: GitPop now works when opened from any subfolder inside a repo
-            - **Smart Repo Detection**: Opening GitPop outside a Git repo now shows a clear message instead of a silent failure
+            - **Adaptive Push UX**: The ↑ button now intelligently adapts — shows "Commit & Push" when files are staged, "Push ↑N" when commits are unpushed, and "Initial Push" for new branches
+            - **Ahead Badge**: A `↑ N` indicator in the titlebar shows how many commits are ahead of remote at a glance
+            - **Initial Push Support**: New repos and branches without an upstream are handled gracefully with `git push -u origin <branch>`
 
             ### 🐛 Bug Fixes
-            - Fixed invisible window on launch caused by missing Tauri v2 window permissions
-            - Fixed pathspec error when committing from subdirectories
-            - Fixed CSS class typo that broke file status color indicators (M, A, D, U)
-            - Enabled HTTPS/TLS for cloud AI providers (OpenAI, Gemini, Anthropic)
+            - Fixed "stage files first" error when trying to push after committing
+            - Commit button now properly disables when no files are staged
 
             ### 📦 Installation
             **Windows users:** Download `GitPop___VERSION___x64_en-US.msi` from the assets below, run it, and then launch GitPop from your Start Menu to install the context menu extension.

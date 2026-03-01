@@ -88,6 +88,42 @@ body {
   font-size: 12px;
 }
 
+.ahead-badge {
+  color: #73c991;
+  background: rgba(115, 201, 145, 0.15);
+  border: 1px solid rgba(115, 201, 145, 0.3);
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  animation: badgePulse 2s ease-in-out infinite;
+}
+
+@keyframes badgePulse {
+
+  0%,
+  100% {
+    opacity: 0.9;
+  }
+
+  50% {
+    opacity: 1;
+    text-shadow: 0 0 6px rgba(115, 201, 145, 0.5);
+  }
+}
+
+.btn-push-ready {
+  background: rgba(115, 201, 145, 0.15) !important;
+  border-color: rgba(115, 201, 145, 0.4) !important;
+  color: #73c991 !important;
+  min-width: 90px;
+}
+
+.btn-push-ready:hover {
+  background: rgba(115, 201, 145, 0.25) !important;
+}
+
 .titlebar-close {
   -webkit-app-region: no-drag;
   background: transparent;
@@ -548,6 +584,7 @@ select.settings-input {
     opacity: 0;
     transform: translateY(-8px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);

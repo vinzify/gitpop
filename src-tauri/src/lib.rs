@@ -423,11 +423,76 @@ fn get_repo_root(path: &str) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct SyncStatus {
+    ahead: u32,
+    has_upstream: bool,
+    branch: String,
+}
+
 #[tauri::command]
-fn push_changes(path: &str) -> Result<(), String> {
+fn get_sync_status(path: &str) -> Result<SyncStatus, String> {
+    // Get current branch name
+    let branch_out = build_hidden_cmd("git")
+        .current_dir(path)
+        .args(["rev-parse", "--abbrev-ref", "HEAD"])
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    let branch = if branch_out.status.success() {
+        String::from_utf8_lossy(&branch_out.stdout).trim().to_string()
+    } else {
+        "main".to_string()
+    };
+
+    // Try to get ahead count — this fails if no upstream is set
+    let ahead_out = build_hidden_cmd("git")
+        .current_dir(path)
+        .args(["rev-list", "--count", "@{u}..HEAD"])
+        .output();
+
+    match ahead_out {
+        Ok(output) if output.status.success() => {
+            let count_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            let ahead = count_str.parse::<u32>().unwrap_or(0);
+            Ok(SyncStatus { ahead, has_upstream: true, branch })
+        }
+        _ => {
+            // No upstream configured (new branch or never pushed)
+            // Count all commits to know if there's something to push
+            let count_out = build_hidden_cmd("git")
+                .current_dir(path)
+                .args(["rev-list", "--count", "HEAD"])
+                .output();
+
+            let ahead = match count_out {
+                Ok(o) if o.status.success() => {
+                    String::from_utf8_lossy(&o.stdout).trim().parse::<u32>().unwrap_or(0)
+                }
+                _ => 0,
+            };
+
+            Ok(SyncStatus { ahead, has_upstream: false, branch })
+        }
+    }
+}
+
+#[tauri::command]
+fn push_changes(path: &str, set_upstream: Option<bool>, branch: Option<String>) -> Result<(), String> {
+    let mut args = vec!["push".to_string()];
+
+    if set_upstream.unwrap_or(false) {
+        args.push("-u".to_string());
+        args.push("origin".to_string());
+        if let Some(b) = branch {
+            args.push(b);
+        }
+    }
+
+    let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
     let out = build_hidden_cmd("git")
         .current_dir(path)
-        .args(["push"])
+        .args(&arg_refs)
         .output()
         .map_err(|e| e.to_string())?;
 
@@ -453,7 +518,8 @@ pub fn run() {
             install_context_menu,
             uninstall_context_menu,
             get_repo_root,
-            push_changes
+            push_changes,
+            get_sync_status
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

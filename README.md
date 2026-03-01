@@ -14,7 +14,8 @@ GitPop transforms your Windows File Explorer right-click menu into a powerful, i
 
 ## ✨ Features
 * **Zero-Friction Context Menu:** Right-click anywhere in a Git repository to immediately open GitPop — even from subdirectories.
-* **Commit & Push:** One-click commit, or commit & push in a single action with the ↑ button.
+* **Commit & Push:** One-click commit, or commit & push in a single action. The ↑ button adapts: "Commit & Push" with staged files, "Push ↑N" with unpushed commits, or "Initial Push" for new branches.
+* **Sync Status:** A `↑ N` badge in the titlebar shows unpushed commits at a glance — never forget to push again.
 * **Instant Native UI:** Built with Tauri + Rust + React. Native performance, tiny memory footprint, opens instantly.
 * **AI Conventional Commits:** Press the "Sparkle" button to generate a conventional commit message.
   * *Local & Private:* Connects locally to [Ollama](https://ollama.com/) (defaults to `llama3.2`) so your proprietary code never leaves your machine.

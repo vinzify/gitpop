@@ -11,6 +11,12 @@ type FileStatus = {
   staged: boolean;
 };
 
+type SyncStatus = {
+  ahead: number;
+  has_upstream: boolean;
+  branch: string;
+};
+
 function App() {
   const [commitMessage, setCommitMessage] = useState("");
   const [isSparkling, setIsSparkling] = useState(false);
@@ -24,6 +30,7 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [setupMessage, setSetupMessage] = useState<{ text: string, isError: boolean } | null>(null);
   const [toast, setToast] = useState<{ message: string, type: 'error' | 'info' } | null>(null);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null);
 
   const showToast = (message: string, type: 'error' | 'info' = 'error') => {
     setToast({ message, type });
@@ -58,6 +65,7 @@ function App() {
           const rootDir: string = await invoke("get_repo_root", { path: dir });
           setRepoPath(rootDir);
           await fetchStatus(rootDir);
+          await refreshSyncStatus(rootDir);
         } catch {
           // Not in a git repo - show setup screen with "not a repo" message
           setIsNotRepo(true);
@@ -89,6 +97,16 @@ function App() {
       setIsNotRepo(false);
     } catch (err) {
       setError(String(err));
+    }
+  };
+
+  const refreshSyncStatus = async (path: string = repoPath) => {
+    try {
+      const status: SyncStatus = await invoke("get_sync_status", { path });
+      setSyncStatus(status);
+    } catch (err) {
+      console.warn("Could not fetch sync status:", err);
+      setSyncStatus(null);
     }
   };
 
@@ -177,29 +195,48 @@ function App() {
     if (success) {
       setCommitMessage("");
       await fetchStatus();
+      await refreshSyncStatus();
     }
   };
 
-  const handleCommitAndPush = async () => {
-    const stagedFiles = files.filter(f => f.staged).map(f => f.path);
-    if (stagedFiles.length === 0) {
-      showToast("Please stage files first.", "info");
-      return;
+  const performPush = async () => {
+    setIsPushing(true);
+    try {
+      const needsUpstream = syncStatus && !syncStatus.has_upstream;
+      await invoke("push_changes", {
+        path: repoPath,
+        set_upstream: needsUpstream || false,
+        branch: syncStatus?.branch || undefined
+      });
+      return true;
+    } catch (err) {
+      showToast(`Push failed: ${err}`);
+      return false;
+    } finally {
+      setIsPushing(false);
+    }
+  };
+
+  // Adaptive: if files are staged → commit & push; if clean tree → just push
+  const handlePushAction = async () => {
+    const hasStagedFiles = files.some(f => f.staged);
+
+    if (hasStagedFiles) {
+      // Commit & Push flow
+      const committed = await performCommit();
+      if (!committed) return;
     }
 
-    const success = await performCommit();
-    if (success) {
-      setIsPushing(true);
-      try {
-        await invoke("push_changes", { path: repoPath });
+    const pushed = await performPush();
+    if (pushed) {
+      if (hasStagedFiles) {
         showToast("Committed and Pushed successfully!", "info");
-        setCommitMessage("");
-        await fetchStatus();
-      } catch (err) {
-        showToast(`Push failed: ${err}`);
-      } finally {
-        setIsPushing(false);
+      } else {
+        showToast("Pushed successfully!", "info");
       }
+      setCommitMessage("");
+      await fetchStatus();
+      await refreshSyncStatus();
     }
   };
 
@@ -426,6 +463,9 @@ function App() {
         <div className="titlebar-left">
           <span>GitPop</span>
           <span className="repo-name">{repoPath.split(/[\\/]/).pop() || "repo"}</span>
+          {syncStatus && syncStatus.ahead > 0 && (
+            <span className="ahead-badge">↑ {syncStatus.ahead}</span>
+          )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <button className="titlebar-close" style={{ opacity: 0.7 }} onClick={() => setIsSettingsMode(true)} title="Settings">
@@ -472,7 +512,7 @@ function App() {
           <div className="section-header">
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span>Changes ({files.length})</span>
-              <button className="btn-refresh" onClick={() => fetchStatus()} title="Refresh">
+              <button className="btn-refresh" onClick={() => { fetchStatus(); refreshSyncStatus(); }} title="Refresh">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="23 4 23 10 17 10"></polyline>
                   <polyline points="1 20 1 14 7 14"></polyline>
@@ -515,13 +555,37 @@ function App() {
 
       {/* Action Bar */}
       <div className="action-bar">
-        <button className="btn-primary" onClick={handleCommit} disabled={isCommitting || isPushing}>
-          {isCommitting && !isPushing ? 'Committing...' : 'Commit'}
-        </button>
-        <button className="btn-icon" onClick={handleCommitAndPush} disabled={isCommitting || isPushing} title={isPushing ? "Pushing..." : "Commit & Push"}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: isPushing ? 0.5 : 1 }}>
-            <path d="M12 19V5M5 12l7-7 7 7" />
-          </svg>
+        {files.some(f => f.staged) ? (
+          <button className="btn-primary" onClick={handleCommit} disabled={isCommitting || isPushing}>
+            {isCommitting && !isPushing ? 'Committing...' : 'Commit'}
+          </button>
+        ) : (
+          <button className="btn-primary" disabled style={{ opacity: 0.5 }}>
+            Commit
+          </button>
+        )}
+        <button
+          className={`btn-icon${!files.some(f => f.staged) && syncStatus && syncStatus.ahead > 0 ? ' btn-push-ready' : ''}`}
+          onClick={handlePushAction}
+          disabled={isCommitting || isPushing || (!files.some(f => f.staged) && (!syncStatus || syncStatus.ahead === 0))}
+          title={
+            isPushing ? 'Pushing...' :
+              files.some(f => f.staged) ? 'Commit & Push' :
+                syncStatus && syncStatus.ahead > 0 ? (syncStatus.has_upstream ? `Push ↑${syncStatus.ahead}` : 'Initial Push') :
+                  'Nothing to push'
+          }
+        >
+          {isPushing ? (
+            <span style={{ fontSize: '12px', fontWeight: 500 }}>Pushing...</span>
+          ) : !files.some(f => f.staged) && syncStatus && syncStatus.ahead > 0 ? (
+            <span style={{ fontSize: '12px', fontWeight: 500 }}>
+              {syncStatus.has_upstream ? `Push ↑${syncStatus.ahead}` : 'Initial Push'}
+            </span>
+          ) : (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 19V5M5 12l7-7 7 7" />
+            </svg>
+          )}
         </button>
       </div>
     </div>
