@@ -15,8 +15,10 @@ function App() {
   const [commitMessage, setCommitMessage] = useState("");
   const [isSparkling, setIsSparkling] = useState(false);
   const [isSetupMode, setIsSetupMode] = useState(false);
+  const [isNotRepo, setIsNotRepo] = useState(false);
   const [isSettingsMode, setIsSettingsMode] = useState(false);
   const [isCommitting, setIsCommitting] = useState(false);
+  const [isPushing, setIsPushing] = useState(false);
   const [files, setFiles] = useState<FileStatus[]>([]);
   const [repoPath, setRepoPath] = useState<string>(".");
   const [error, setError] = useState<string | null>(null);
@@ -50,8 +52,17 @@ function App() {
         if (savedCustomApiUrl) setCustomApiUrl(savedCustomApiUrl as unknown as string);
 
         const dir: string = await invoke("get_startup_dir");
-        setRepoPath(dir);
-        await fetchStatus(dir);
+
+        // Resolve to the root of the Git repo so subdirectories work
+        try {
+          const rootDir: string = await invoke("get_repo_root", { path: dir });
+          setRepoPath(rootDir);
+          await fetchStatus(rootDir);
+        } catch {
+          // Not in a git repo - show setup screen with "not a repo" message
+          setIsNotRepo(true);
+          setIsSetupMode(true);
+        }
 
         try {
           const models: string[] = await invoke("get_ollama_models");
@@ -75,14 +86,9 @@ function App() {
       setFiles(result);
       setError(null);
       setIsSetupMode(false);
+      setIsNotRepo(false);
     } catch (err) {
-      const errMsg = String(err);
-      console.error("Failed to get git status:", errMsg);
-      if (errMsg.toLowerCase().includes("not a git repository")) {
-        setIsSetupMode(true);
-      } else {
-        setError(errMsg);
-      }
+      setError(String(err));
     }
   };
 
@@ -128,9 +134,10 @@ function App() {
     }
   };
 
-  const handleCommit = async () => {
+  // Reusable commit logic for both Commit and Commit & Push
+  const performCommit = async (): Promise<boolean> => {
     const stagedFiles = files.filter(f => f.staged).map(f => f.path);
-    if (stagedFiles.length === 0) return;
+    if (stagedFiles.length === 0) return false;
 
     let finalMessage = commitMessage.trim();
 
@@ -145,7 +152,7 @@ function App() {
       } catch (err) {
         showToast(`Error auto-generating commit: ${err}`);
         setIsCommitting(false);
-        return;
+        return false;
       }
     }
 
@@ -156,12 +163,43 @@ function App() {
         message: finalMessage,
         files: stagedFiles
       });
-      setCommitMessage("");
-      await fetchStatus();
+      return true;
     } catch (err) {
       showToast(`Commit failed: ${err}`);
+      return false;
     } finally {
       setIsCommitting(false);
+    }
+  };
+
+  const handleCommit = async () => {
+    const success = await performCommit();
+    if (success) {
+      setCommitMessage("");
+      await fetchStatus();
+    }
+  };
+
+  const handleCommitAndPush = async () => {
+    const stagedFiles = files.filter(f => f.staged).map(f => f.path);
+    if (stagedFiles.length === 0) {
+      showToast("Please stage files first.", "info");
+      return;
+    }
+
+    const success = await performCommit();
+    if (success) {
+      setIsPushing(true);
+      try {
+        await invoke("push_changes", { path: repoPath });
+        showToast("Committed and Pushed successfully!", "info");
+        setCommitMessage("");
+        await fetchStatus();
+      } catch (err) {
+        showToast(`Push failed: ${err}`);
+      } finally {
+        setIsPushing(false);
+      }
     }
   };
 
@@ -217,8 +255,12 @@ function App() {
         </div>
         <div className="setup-content">
           <img src="/logo.png" className="setup-icon-img" alt="GitPop Logo" />
-          <h2>Welcome to GitPop</h2>
-          <p>You can add GitPop directly to your Windows right-click menu to instantly commit and push from any directory.</p>
+          {isNotRepo ? <h2>Not a Git Repository</h2> : <h2>Welcome to GitPop</h2>}
+          {isNotRepo ? (
+            <p style={{ color: 'var(--color-deleted)' }}>You opened GitPop in a folder that doesn't contain a .git repository.</p>
+          ) : (
+            <p>You can add GitPop directly to your Windows right-click menu to instantly commit and push from any directory.</p>
+          )}
 
           {setupMessage && (
             <div style={{ color: setupMessage.isError ? 'var(--color-deleted)' : 'var(--color-added)', padding: '8px 12px', background: 'rgba(255,255,255,0.05)', borderRadius: '6px', marginBottom: '16px', fontSize: '13px' }}>
@@ -473,11 +515,11 @@ function App() {
 
       {/* Action Bar */}
       <div className="action-bar">
-        <button className="btn-primary" onClick={handleCommit} disabled={isCommitting}>
-          {isCommitting ? 'Committing...' : 'Commit'}
+        <button className="btn-primary" onClick={handleCommit} disabled={isCommitting || isPushing}>
+          {isCommitting && !isPushing ? 'Committing...' : 'Commit'}
         </button>
-        <button className="btn-icon" title="Commit & Push">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <button className="btn-icon" onClick={handleCommitAndPush} disabled={isCommitting || isPushing} title={isPushing ? "Pushing..." : "Commit & Push"}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: isPushing ? 0.5 : 1 }}>
             <path d="M12 19V5M5 12l7-7 7 7" />
           </svg>
         </button>

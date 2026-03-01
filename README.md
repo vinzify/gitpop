@@ -13,10 +13,13 @@
 GitPop transforms your Windows File Explorer right-click menu into a powerful, intelligent source control extension. It bridges the gap between terminal commands and heavy GUI clients by offering a fast, sleek contextual popup mirroring VS Code's source control tab.
 
 ## ✨ Features
-* **Zero-Friction Context Menu:** Right-click anywhere in a Git repository to immediately open GitPop.
+* **Zero-Friction Context Menu:** Right-click anywhere in a Git repository to immediately open GitPop — even from subdirectories.
+* **Commit & Push:** One-click commit, or commit & push in a single action with the ↑ button.
 * **Instant Native UI:** Built with Tauri + Rust + React. Native performance, tiny memory footprint, opens instantly.
 * **AI Conventional Commits:** Press the "Sparkle" button to generate a conventional commit message.
   * *Local & Private:* Connects locally to [Ollama](https://ollama.com/) (defaults to `llama3.2`) so your proprietary code never leaves your machine.
+  * *Cloud Providers:* Native support for OpenAI, Google Gemini, Anthropic Claude, and any OpenAI-compatible API.
+* **Smart Repo Detection:** Opens the setup screen with a friendly message when used outside a Git repository.
 * **Premium Aesthetics:** Dark mode, glassmorphism UI overlay right over your File Explorer.
 
 ## 🚀 Installation

@@ -32,8 +32,23 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: v__VERSION__ # Automatically uses the version from package.json
+          tagName: v__VERSION__
           releaseName: 'GitPop v__VERSION__'
-          releaseBody: "## What's Changed\nSee the commits below for details on this release.\n\n### 📦 Installation\n**Windows users:** Download `GitPop___VERSION___x64_en-US.msi` from the assets below, run it, and then launch GitPop from your Start Menu to install the context menu extension."
+          releaseBody: |
+            ## What's Changed
+
+            ### 🚀 New Features
+            - **Commit & Push**: The ↑ button now commits and pushes in one action
+            - **Subdirectory Support**: GitPop now works when opened from any subfolder inside a repo
+            - **Smart Repo Detection**: Opening GitPop outside a Git repo now shows a clear message instead of a silent failure
+
+            ### 🐛 Bug Fixes
+            - Fixed invisible window on launch caused by missing Tauri v2 window permissions
+            - Fixed pathspec error when committing from subdirectories
+            - Fixed CSS class typo that broke file status color indicators (M, A, D, U)
+            - Enabled HTTPS/TLS for cloud AI providers (OpenAI, Gemini, Anthropic)
+
+            ### 📦 Installation
+            **Windows users:** Download `GitPop___VERSION___x64_en-US.msi` from the assets below, run it, and then launch GitPop from your Start Menu to install the context menu extension.
           releaseDraft: false
           prerelease: false

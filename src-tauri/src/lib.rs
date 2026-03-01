@@ -408,6 +408,35 @@ fn uninstall_context_menu() -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+fn get_repo_root(path: &str) -> Result<String, String> {
+    let output = build_hidden_cmd("git")
+        .current_dir(path)
+        .args(["rev-parse", "--show-toplevel"])
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if !output.status.success() {
+        return Err(String::from_utf8_lossy(&output.stderr).to_string());
+    }
+
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+#[tauri::command]
+fn push_changes(path: &str) -> Result<(), String> {
+    let out = build_hidden_cmd("git")
+        .current_dir(path)
+        .args(["push"])
+        .output()
+        .map_err(|e| e.to_string())?;
+
+    if !out.status.success() {
+        return Err(String::from_utf8_lossy(&out.stderr).to_string());
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -422,7 +451,9 @@ pub fn run() {
             get_ollama_models,
             get_startup_dir,
             install_context_menu,
-            uninstall_context_menu
+            uninstall_context_menu,
+            get_repo_root,
+            push_changes
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
