@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "GitPop",
-  "version": "1.1.6",
+  "version": "1.1.7",
   "identifier": "com.vinzify.gitpop",
   "build": {
     "beforeDevCommand": "npm run dev",

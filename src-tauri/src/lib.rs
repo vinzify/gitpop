@@ -383,8 +383,7 @@ fn install_context_menu() -> Result<(), String> {
     let bg_path = r#"Software\Classes\Directory\Background\shell\GitPop"#;
     let (bg_key, _) = hkcu.create_subkey(bg_path).map_err(|e| e.to_string())?;
     bg_key.set_value("", &"GitPop Here").map_err(|e| e.to_string())?;
-    let icon_value = format!("{},0", exe_path);
-    bg_key.set_value("Icon", &icon_value).map_err(|e| e.to_string())?;
+    bg_key.set_value("Icon", &exe_path).map_err(|e| e.to_string())?;
 
     let (bg_cmd, _) = bg_key.create_subkey("command").map_err(|e| e.to_string())?;
     bg_cmd.set_value("", &format!("\"{}\" \"%V\"", exe_path)).map_err(|e| e.to_string())?;
@@ -393,7 +392,7 @@ fn install_context_menu() -> Result<(), String> {
     let dir_path = r#"Software\Classes\Directory\shell\GitPop"#;
     let (dir_key, _) = hkcu.create_subkey(dir_path).map_err(|e| e.to_string())?;
     dir_key.set_value("", &"GitPop Here").map_err(|e| e.to_string())?;
-    dir_key.set_value("Icon", &icon_value).map_err(|e| e.to_string())?;
+    dir_key.set_value("Icon", &exe_path).map_err(|e| e.to_string())?;
 
     let (dir_cmd, _) = dir_key.create_subkey("command").map_err(|e| e.to_string())?;
     dir_cmd.set_value("", &format!("\"{}\" \"%1\"", exe_path)).map_err(|e| e.to_string())?;
