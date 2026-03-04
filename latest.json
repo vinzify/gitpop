@@ -1,11 +1,11 @@
 {
-    "version": "1.4.1",
+    "version": "1.4.2",
     "notes": "Added the Tauri v2 Auto-Updater so you can upgrade from within the UI.",
     "pub_date": "2026-03-04T00:00:00Z",
     "platforms": {
         "windows-x86_64": {
             "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUM0pBSVpaeEhpNkNtL3BZNFlkd2VlWnJPcmtoNCtFc1dnOG9rT09jVDRab3VyYWdOVExMRXQvRDdTc2NUYldzTWJMRTl1MWxtWk83TjErVVBILytMWHZVck1Fc1c1akFBPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzcyNTg5NTIyCWZpbGU6R2l0UG9wXzEuNC4xX3g2NC1zZXR1cC5leGUKSy9tRmR0aXJUTlRlMzVSVlVCR0pWZmZQSVlOcmtLL3lTRGlhQmNSRTVOS1VaS21WMGNrTnkvUzlUV1pyK3gzdzN2SnhnUnI1TWMvOFdHdVNCaHpzQVE9PQo=",
-            "url": "https://github.com/vinzify/gitpop/releases/download/v1.4.1/GitPop_1.4.1_x64-setup.exe"
+            "url": "https://github.com/vinzify/gitpop/releases/download/v1.4.2/GitPop_1.4.2_x64-setup.exe"
         }
     }
 }
