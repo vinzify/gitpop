@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { exit } from "@tauri-apps/plugin-process";
+import { exit, relaunch } from "@tauri-apps/plugin-process";
+import { check } from "@tauri-apps/plugin-updater";
 import { load } from '@tauri-apps/plugin-store';
 import "./App.css";
 
@@ -45,6 +46,10 @@ function App() {
   const [apiKey, setApiKey] = useState("");
   const [customApiUrl, setCustomApiUrl] = useState("");
   const [localOllamaModels, setLocalOllamaModels] = useState<string[]>([]);
+
+  // Auto-Updater status tracking
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+  const [updateStatusText, setUpdateStatusText] = useState('Check for Updates');
 
   useEffect(() => {
     async function init() {
@@ -279,6 +284,51 @@ function App() {
     }
   };
 
+  const handleCheckUpdate = async () => {
+    try {
+      setIsCheckingUpdate(true);
+      setUpdateStatusText('Checking server...');
+
+      const update = await check();
+      if (update) {
+        setUpdateStatusText(`Downloading v${update.version}...`);
+        let downloaded = 0;
+        let contentLength = 0;
+
+        await update.downloadAndInstall((event) => {
+          switch (event.event) {
+            case 'Started':
+              contentLength = event.data?.contentLength || 0;
+              setUpdateStatusText(`Installing update...`);
+              break;
+            case 'Progress':
+              downloaded += event.data.chunkLength;
+              if (contentLength > 0) {
+                const percent = Math.round((downloaded / contentLength) * 100);
+                setUpdateStatusText(`Downloading... ${percent}%`);
+              }
+              break;
+            case 'Finished':
+              setUpdateStatusText('Finished. Relaunching...');
+              break;
+          }
+        });
+
+        setUpdateStatusText('Relaunching app...');
+        await relaunch();
+      } else {
+        setUpdateStatusText('You are on the latest version!');
+        setTimeout(() => setUpdateStatusText('Check for Updates'), 3000);
+      }
+    } catch (error) {
+      console.error('Update failed:', error);
+      setUpdateStatusText('Update failed. Try again.');
+      setTimeout(() => setUpdateStatusText('Check for Updates'), 3000);
+    } finally {
+      setIsCheckingUpdate(false);
+    }
+  };
+
   if (isSetupMode) {
     return (
       <div className="app-container setup-container">
@@ -381,6 +431,23 @@ function App() {
         </div>
 
         <div className="setup-content settings-content" style={{ alignItems: 'flex-start', textAlign: 'left' }}>
+
+          <div className="settings-group" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)', width: '100%', boxSizing: 'border-box' }}>
+            <div>
+              <label style={{ margin: 0, color: 'white' }}>Application Updates</label>
+              <p style={{ margin: '4px 0 0', fontSize: '11px', color: 'rgba(255,255,255,0.6)' }}>Download and install the latest version</p>
+            </div>
+            <button
+              className="btn-secondary"
+              onClick={handleCheckUpdate}
+              disabled={isCheckingUpdate}
+              style={{ margin: 0, padding: '6px 12px', fontSize: '12px' }}
+            >
+              {isCheckingUpdate ? <span className="spinning" style={{ display: 'inline-block', marginRight: '6px' }}>↻</span> : <span style={{ marginRight: '6px' }}>↓</span>}
+              <span>{updateStatusText}</span>
+            </button>
+          </div>
+
           <h2>AI Provider Settings</h2>
 
           <div className="settings-group">

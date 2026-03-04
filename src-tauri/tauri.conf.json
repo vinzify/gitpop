@@ -1,13 +1,21 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "GitPop",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "identifier": "com.vinzify.gitpop",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
     "beforeBuildCommand": "npm run build",
     "frontendDist": "../dist"
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDVENjAyQjMyNzkxOUY0ODgKUldTSTlCbDVNaXRnWGIxcmtKemlUN3d4RkZRZEpZUkg1aWFaRkRNRGJ3TUZKTlFSbFRFWEYwZi8K",
+      "endpoints": [
+        "https://github.com/vinzify/gitpop/releases/latest/download/latest.json"
+      ]
+    }
   },
   "app": {
     "windows": [
@@ -27,6 +35,7 @@
   },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "targets": "all",
     "icon": [
       "icons/32x32.png",

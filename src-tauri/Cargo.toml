@@ -1,6 +1,6 @@
 [package]
 name = "tauri-appgitpop"
-version = "1.4.0"
+version = "1.4.1"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
@@ -26,6 +26,7 @@ reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
 winreg = "0.55.0"
 tauri-plugin-store = "2"
 tauri-plugin-process = "2"
+tauri-plugin-updater = "2"
 
 [profile.release]
 panic = "abort" # Strip expensive panic clean-up logic
