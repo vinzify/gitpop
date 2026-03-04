@@ -14,15 +14,14 @@ GitPop transforms your Windows File Explorer right-click menu into a powerful, i
 
 ## ✨ Features
 * **Zero-Friction Context Menu:** Right-click anywhere in a Git repository to immediately open GitPop — even from subdirectories.
-* **Commit & Push:** One-click commit, or commit & push in a single action. The ↑ button adapts: "Commit & Push" with staged files, "Push ↑N" with unpushed commits, or "Initial Push" for new branches.
-* **Sync Status:** A `↑ N` badge in the titlebar shows unpushed commits at a glance — never forget to push again.
-* **Instant Native UI:** Built with Tauri + Rust + React. Native performance, tiny memory footprint, opens instantly.
-* **AI Conventional Commits:** Press the "Sparkle" button to generate a conventional commit message.
+* **Commit & Push:** One-click commit, or commit & push in a single action. The **Push** button intelligently adapts: "Commit & Push" with staged files, "Push ↑N" with unpushed commits, or "Initial Push" for new branches.
+* **Sync Status:** A `↑ N` indicator in the titlebar shows unpushed commits at a glance — never forget to push your code again.
+* **Smart Repo Detection (Init & Connect):** Used GitPop outside a Git repository? No problem. Initialize a new repo right from the UI and optionally paste a remote URL to push when you're ready.
+* **Instant Native UI & Premium Aesthetics:** Built with Tauri + Rust + React. Native performance, tiny memory footprint, dark mode glassmorphism UI overlaying smoothly over your File Explorer. opens instantly.
+* **AI Conventional Commits:** Press the "Sparkle" button to generate a beautiful conventional commit message summarizing your changes.
   * *Local & Private:* Connects locally to [Ollama](https://ollama.com/) (defaults to `llama3.2`) so your proprietary code never leaves your machine.
-  * *Cloud Providers:* Native support for OpenAI, Google Gemini, Anthropic Claude, and any OpenAI-compatible API.
-* **Smart Repo Detection:** Opens the setup screen with a friendly message when used outside a Git repository.
-  * *Init & Connect:* Initialize a new repo right from GitPop — optionally paste a remote URL and push when ready.
-* **Premium Aesthetics:** Dark mode, glassmorphism UI overlay right over your File Explorer.
+  * *Cloud Providers:* Native support for OpenAI, Google Gemini, Anthropic Claude, and any OpenAI-compatible API endpoint.
+* **In-App Auto-Updater:** Never redownload an installer. Pull the latest patches seamlessly from the Settings panel.
 
 ## 🚀 Installation
 
