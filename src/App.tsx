@@ -432,19 +432,21 @@ function App() {
 
         <div className="setup-content settings-content" style={{ alignItems: 'flex-start', textAlign: 'left' }}>
 
-          <div className="settings-group" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.05)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)', width: '100%', boxSizing: 'border-box' }}>
-            <div>
-              <label style={{ margin: 0, color: 'white' }}>Application Updates</label>
-              <p style={{ margin: '4px 0 0', fontSize: '11px', color: 'rgba(255,255,255,0.6)' }}>Download and install the latest version</p>
+          <div className="settings-group" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '0 0 16px 0', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '16px', width: '100%', boxSizing: 'border-box' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '18px' }}>↓</span>
+              <div>
+                <label style={{ margin: 0, fontSize: '13px', color: 'rgba(255,255,255,0.9)' }}>Software Update</label>
+                <p style={{ margin: 0, fontSize: '11px', color: 'rgba(255,255,255,0.5)' }}>Check for the latest version</p>
+              </div>
             </div>
             <button
-              className="btn-secondary"
+              style={{ margin: 0, padding: '6px 10px', fontSize: '11px', backgroundColor: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '4px', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
               onClick={handleCheckUpdate}
               disabled={isCheckingUpdate}
-              style={{ margin: 0, padding: '6px 12px', fontSize: '12px' }}
             >
-              {isCheckingUpdate ? <span className="spinning" style={{ display: 'inline-block', marginRight: '6px' }}>↻</span> : <span style={{ marginRight: '6px' }}>↓</span>}
-              <span>{updateStatusText}</span>
+              {isCheckingUpdate ? <span className="spinning" style={{ display: 'inline-block' }}>↻</span> : null}
+              <span style={{ fontWeight: 500 }}>{updateStatusText}</span>
             </button>
           </div>
 

@@ -27,6 +27,28 @@ jobs:
       - name: Install web dependencies
         run: npm install
 
+      - name: Pre-download NSIS and WiX to prevent connection drops
+        run: |
+          $tauriDir = "$env:LOCALAPPDATA\tauri"
+          New-Item -ItemType Directory -Force -Path "$tauriDir\WIX"
+          New-Item -ItemType Directory -Force -Path "$tauriDir\NSIS"
+          function Download-WithRetry {
+            param($url, $outFile)
+            for ($i = 0; $i -lt 5; $i++) {
+              try {
+                Invoke-WebRequest -Uri $url -OutFile $outFile -ErrorAction Stop
+                Write-Host "Successfully downloaded $url"
+                return
+              } catch {
+                Write-Host "Failed to download $url : $_. Retrying..."
+                Start-Sleep -Seconds 5
+              }
+            }
+            throw "Failed to download after 5 attempts."
+          }
+          Download-WithRetry -url "https://github.com/wixtoolset/wix3/releases/download/wix3141rtm/wix314-binaries.zip" -outFile "$tauriDir\WIX\wix314-binaries.zip"
+          Download-WithRetry -url "https://github.com/tauri-apps/binary-releases/releases/download/nsis-3.11/nsis-3.11.zip" -outFile "$tauriDir\NSIS\nsis-3.11.zip"
+
       - name: Build and Publish Tauri App
         uses: tauri-apps/tauri-action@v0
         env:
