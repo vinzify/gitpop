@@ -334,7 +334,7 @@ function App() {
     }
   };
 
-  if (isSetupMode) {
+  if (isSetupMode && !isSettingsMode) {
     return (
       <div className="app-container setup-container">
         <div className="titlebar" data-tauri-drag-region>
