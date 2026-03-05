@@ -48,8 +48,14 @@ If you want to ensure your proprietary code never leaves your machine:
 2. Run `ollama pull llama3.2` (or your preferred code model) in your terminal.
 3. Ensure Ollama is running (`localhost:11434`), stage your files in GitPop, and click **Sparkle**.
 
-#### Option 2: Cloud & Custom AI Models
-GitPop natively supports major proprietary cloud providers and **any OpenAI-compatible API**.
+#### Option 2: Local LM Studio
+GitPop now natively supports model discovery for LM Studio.
+1. Download and launch [LM Studio](https://lmstudio.ai/).
+2. Start the Local Server (usually `localhost:1234`).
+3. In GitPop Settings, select **LM Studio** and click the refresh icon to see your loaded models.
+
+#### Option 3: Cloud & Custom AI Models
+GitPop natively supports major proprietary cloud providers and any OpenAI-compatible API.
 1. Select **OpenAI**, **Google Gemini**, **Anthropic Claude**, or **Custom** in the GitPop settings.
 2. Enter your desired Model Name (e.g., `gpt-4o`, `gemini-1.5-flash`, `claude-3-5-sonnet`, or any local/custom ID).
 3. Provide your API Key (and API Base URL if using Custom mode).
