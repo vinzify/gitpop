@@ -19,7 +19,7 @@ GitPop transforms your Windows File Explorer right-click menu into a powerful, i
 * **Smart Repo Detection (Init & Connect):** Used GitPop outside a Git repository? No problem. Initialize a new repo right from the UI and optionally paste a remote URL to push when you're ready.
 * **Instant Native UI & Premium Aesthetics:** Built with Tauri + Rust + React. Native performance, tiny memory footprint, dark mode glassmorphism UI overlaying smoothly over your File Explorer. opens instantly.
 * **AI Conventional Commits:** Press the "Sparkle" button to generate a beautiful conventional commit message summarizing your changes.
-  * *Local & Private:* Connects locally to [Ollama](https://ollama.com/) (defaults to `llama3.2`) so your proprietary code never leaves your machine.
+  * *Local & Private:* Native support for [Ollama](https://ollama.com/) and [LM Studio](https://lmstudio.ai/) so your proprietary code stays local.
   * *Cloud Providers:* Native support for OpenAI, Google Gemini, Anthropic Claude, and any OpenAI-compatible API endpoint.
 * **In-App Auto-Updater:** Never redownload an installer. Pull the latest patches seamlessly from the Settings panel.
 
