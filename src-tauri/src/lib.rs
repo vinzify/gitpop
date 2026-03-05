@@ -186,6 +186,36 @@ async fn generate_ai_commit(diff: String, config: AiConfig) -> Result<String, St
 
             Ok(parsed.response.trim().to_string())
         }
+        "lmstudio" => {
+            let res = client.post("http://localhost:1234/v1/chat/completions")
+                .json(&serde_json::json!({
+                    "model": config.model,
+                    "messages": [{"role": "user", "content": prompt}]
+                }))
+                .send()
+                .await
+                .map_err(|e| format!("Failed to connect to local LM Studio (is it running on port 1234?): {}", e))?;
+                
+            if !res.status().is_success() {
+                let error_text = res.text().await.unwrap_or_default();
+                return Err(format!("LM Studio API error: {}", error_text));
+            }
+
+            let parsed: serde_json::Value = res.json()
+                .await
+                .map_err(|e| format!("Failed to parse LM Studio response: {}", e))?;
+                
+            if let Some(choices) = parsed.get("choices") {
+                if let Some(first_choice) = choices.get(0) {
+                    if let Some(message) = first_choice.get("message") {
+                        if let Some(content) = message.get("content") {
+                            return Ok(content.as_str().unwrap_or_default().trim().to_string());
+                        }
+                    }
+                }
+            }
+            Err("Unexpected response structure from LM Studio".to_string())
+        }
         "openai" => {
             let res = client.post("https://api.openai.com/v1/chat/completions")
                 .bearer_auth(config.api_key.unwrap_or_default())
@@ -352,6 +382,41 @@ async fn get_ollama_models() -> Result<Vec<String>, String> {
         }
     }
 
+    Ok(models)
+}
+
+#[tauri::command]
+async fn get_openai_models(url: String, api_key: Option<String>) -> Result<Vec<String>, String> {
+    let client = reqwest::Client::new();
+    let mut request = client.get(format!("{}/models", url.trim_end_matches('/')));
+    
+    if let Some(key) = api_key {
+        if !key.trim().is_empty() {
+            request = request.bearer_auth(key);
+        }
+    }
+    
+    let res = request.send()
+        .await
+        .map_err(|e| format!("Failed to connect to AI provider: {}", e))?;
+        
+    if !res.status().is_success() {
+        return Err(format!("AI provider returned error: {}", res.status()));
+    }
+    
+    let json: serde_json::Value = res.json()
+        .await
+        .map_err(|e| format!("Failed to parse response: {}", e))?;
+        
+    let mut models = Vec::new();
+    if let Some(data) = json.get("data").and_then(|d| d.as_array()) {
+        for model in data {
+            if let Some(id) = model.get("id").and_then(|i| i.as_str()) {
+                models.push(id.to_string());
+            }
+        }
+    }
+    
     Ok(models)
 }
 
@@ -553,7 +618,8 @@ pub fn run() {
             get_repo_root,
             push_changes,
             get_sync_status,
-            init_repo
+            init_repo,
+            get_openai_models
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

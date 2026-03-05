@@ -2,13 +2,13 @@ name: Release GitPop
 on:
   push:
     tags:
-      - 'v*' # Triggers workflow when you push a tag like "v1.0.0"
+      - 'v*'
 
 jobs:
   publish:
     permissions:
       contents: write
-    runs-on: windows-latest # We only need Windows for GitPop
+    runs-on: windows-latest
 
     steps:
       - name: Checkout repository
@@ -27,34 +27,10 @@ jobs:
       - name: Install web dependencies
         run: npm install
 
-      - name: Pre-download NSIS and WiX to prevent connection drops
-        run: |
-          $tauriDir = "$env:LOCALAPPDATA\tauri"
-          New-Item -ItemType Directory -Force -Path "$tauriDir\WIX"
-          New-Item -ItemType Directory -Force -Path "$tauriDir\NSIS"
-          function Download-WithRetry {
-            param($url, $outFile)
-            for ($i = 0; $i -lt 5; $i++) {
-              try {
-                Invoke-WebRequest -Uri $url -OutFile $outFile -ErrorAction Stop
-                Write-Host "Successfully downloaded $url"
-                return
-              } catch {
-                Write-Host "Failed to download $url : $_. Retrying..."
-                Start-Sleep -Seconds 5
-              }
-            }
-            throw "Failed to download after 5 attempts."
-          }
-          Download-WithRetry -url "https://github.com/wixtoolset/wix3/releases/download/wix3141rtm/wix314-binaries.zip" -outFile "$tauriDir\WIX\wix314-binaries.zip"
-          Download-WithRetry -url "https://github.com/tauri-apps/binary-releases/releases/download/nsis-3.11/nsis-3.11.zip" -outFile "$tauriDir\NSIS\nsis-3.11.zip"
-
       - name: Build and Publish Tauri App
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: v__VERSION__
           releaseName: 'GitPop v__VERSION__'
@@ -62,13 +38,13 @@ jobs:
             ## What's Changed
 
             ### 🚀 New Features
-            - **Init & Connect**: Open GitPop in any folder — if it's not a Git repo, initialize one right from the UI with an optional remote URL
-            - **Adaptive Push UX**: The ↑ button intelligently adapts — "Commit & Push" with staged files, "Push ↑N" with unpushed commits, or "Initial Push" for new branches
-            - **Ahead Badge**: A `↑ N` indicator in the titlebar shows unpushed commits at a glance
+            - **LM Studio Support**: Added native support for LM Studio and other OpenAI-compatible local AI runners.
+            - **Model Discovery**: Auto-populate models from LM Studio and custom endpoints using the standard `/v1/models` API. 
+            - **Refresh Models**: Added a refresh button in settings to pull latest models from local runners.
 
-            ### 🐛 Bug Fixes
-            - Fixed "stage files first" error when pushing after committing
-            - Commit button properly disables when no files are staged
+            ### 🔧 Improvements
+            - Settings UI now distinguishes better between cloud and local providers.
+            - Improved model selection logic for "Custom" providers.
 
             ### 📦 Installation
             **Windows users:** Download `GitPop___VERSION___x64_en-US.msi` from the assets below, run it, and then launch GitPop from your Start Menu to install the context menu extension.

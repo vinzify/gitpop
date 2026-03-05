@@ -47,7 +47,8 @@ function App() {
   const [aiModel, setAiModel] = useState("llama3.2");
   const [apiKey, setApiKey] = useState("");
   const [customApiUrl, setCustomApiUrl] = useState("");
-  const [localOllamaModels, setLocalOllamaModels] = useState<string[]>([]);
+  const [localModels, setLocalModels] = useState<string[]>([]);
+  const [isFetchingModels, setIsFetchingModels] = useState(false);
 
   // Auto-Updater status tracking
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
@@ -86,12 +87,11 @@ function App() {
           setIsSetupMode(true);
         }
 
-        try {
-          const models: string[] = await invoke("get_ollama_models");
-          setLocalOllamaModels(models);
-        } catch (ollamaErr) {
-          console.warn("Could not fetch local Ollama models:", ollamaErr);
-        }
+        fetchModels(
+          (savedProvider as { value: string })?.value || "ollama",
+          (savedCustomApiUrl as { value: string })?.value || "",
+          (savedApiKey as { value: string })?.value || ""
+        );
       } catch (err) {
         console.error(err);
         setError(`Fatal Initialization Error: ${err}`);
@@ -111,6 +111,25 @@ function App() {
       setIsNotRepo(false);
     } catch (err) {
       setError(String(err));
+    }
+  };
+
+  const fetchModels = async (provider = aiProvider, url = customApiUrl, key = apiKey) => {
+    setIsFetchingModels(true);
+    try {
+      let models: string[] = [];
+      if (provider === 'ollama') {
+        models = await invoke("get_ollama_models");
+      } else if (provider === 'lmstudio') {
+        models = await invoke("get_openai_models", { url: "http://localhost:1234/v1", api_key: null });
+      } else if (provider === "custom" && url) {
+        models = await invoke("get_openai_models", { url, api_key: key || null });
+      }
+      setLocalModels(models);
+    } catch (err) {
+      console.warn("Could not fetch models:", err);
+    } finally {
+      setIsFetchingModels(false);
     }
   };
 
@@ -478,8 +497,12 @@ function App() {
 
           <div className="settings-group">
             <label>Provider</label>
-            <select value={aiProvider} onChange={(e) => setAiProvider(e.target.value)} className="settings-input">
+            <select value={aiProvider} onChange={(e) => {
+              setAiProvider(e.target.value);
+              fetchModels(e.target.value);
+            }} className="settings-input">
               <option value="ollama">Local Ollama</option>
+              <option value="lmstudio">Local LM Studio</option>
               <option value="openai">OpenAI</option>
               <option value="anthropic">Anthropic Claude</option>
               <option value="gemini">Google Gemini</option>
@@ -507,8 +530,9 @@ function App() {
                 {aiModel &&
                   !(aiProvider === 'openai' && ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "o1-preview", "o1-mini", "o3-mini"].includes(aiModel)) &&
                   !(aiProvider === 'anthropic' && ["claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022", "claude-3-opus-20240229"].includes(aiModel)) &&
-                  !(aiProvider === 'gemini' && ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-1.5-flash", "gemini-1.5-pro"].includes(aiModel)) &&
-                  !(aiProvider === 'ollama' && (localOllamaModels.length > 0 ? localOllamaModels.includes(aiModel) : ["llama3.2", "llama3.1", "mistral", "qwen2.5-coder", "deepseek-coder"].includes(aiModel))) && (
+                  !(aiProvider === 'gemini' && ["gemini-2.1-flash", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"].includes(aiModel)) &&
+                  !(aiProvider === 'ollama' && (localModels.length > 0 ? localModels.includes(aiModel) : ["llama3.2", "llama3.1", "mistral", "qwen2.5-coder", "deepseek-coder"].includes(aiModel))) &&
+                  !(aiProvider === 'lmstudio' && (localModels.length > 0 ? localModels.includes(aiModel) : false)) && (
                     <option value={aiModel}>{aiModel} (Custom)</option>
                   )}
 
@@ -539,8 +563,8 @@ function App() {
                 )}
                 {aiProvider === 'ollama' && (
                   <>
-                    {localOllamaModels.length > 0 ? (
-                      localOllamaModels.map(model => (
+                    {localModels.length > 0 ? (
+                      localModels.map(model => (
                         <option key={model} value={model}>{model}</option>
                       ))
                     ) : (
@@ -554,6 +578,17 @@ function App() {
                     )}
                   </>
                 )}
+                {aiProvider === 'lmstudio' && (
+                  <>
+                    {localModels.length > 0 ? (
+                      localModels.map(model => (
+                        <option key={model} value={model}>{model}</option>
+                      ))
+                    ) : (
+                      <option disabled>No local models found</option>
+                    )}
+                  </>
+                )}
               </select>
             )}
           </div>
@@ -561,13 +596,38 @@ function App() {
           {aiProvider === 'custom' && (
             <div className="settings-group">
               <label>API Base URL</label>
-              <input
-                type="text"
-                value={customApiUrl}
-                onChange={(e) => setCustomApiUrl(e.target.value)}
-                placeholder="https://api.groq.com/openai/v1"
-                className="settings-input"
-              />
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <input
+                  type="text"
+                  value={customApiUrl}
+                  onChange={(e) => setCustomApiUrl(e.target.value)}
+                  placeholder="https://api.groq.com/openai/v1"
+                  className="settings-input"
+                  style={{ flex: 1 }}
+                />
+                <button
+                  className="btn-secondary"
+                  style={{ padding: '0 12px', height: '32px', margin: 0 }}
+                  onClick={() => fetchModels('custom', customApiUrl, apiKey)}
+                  title="Refresh models from URL"
+                  disabled={isFetchingModels}
+                >
+                  {isFetchingModels ? '...' : '↻'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {(aiProvider === 'ollama' || aiProvider === 'lmstudio') && (
+            <div style={{ marginBottom: '16px' }}>
+              <button
+                className="btn-secondary"
+                style={{ width: '100%', fontSize: '11px', padding: '6px' }}
+                onClick={() => fetchModels(aiProvider)}
+                disabled={isFetchingModels}
+              >
+                {isFetchingModels ? 'Refreshing Models...' : '↻ Refresh Local Models'}
+              </button>
             </div>
           )}
 
