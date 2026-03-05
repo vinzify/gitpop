@@ -1,6 +1,6 @@
 [package]
 name = "tauri-appgitpop"
-version = "1.4.1"
+version = "1.4.8"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
