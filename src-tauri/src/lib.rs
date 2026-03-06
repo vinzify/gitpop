@@ -94,26 +94,55 @@ fn get_git_status(path: &str) -> Result<Vec<GitFileStatus>, String> {
 }
 
 #[tauri::command]
-fn get_git_diff(path: &str) -> Result<String, String> {
-    let output = build_hidden_cmd("git")
+fn get_git_diff(path: &str, files: Vec<String>) -> Result<String, String> {
+    // 1. Unstage everything to get a clean state
+    let _ = build_hidden_cmd("git")
         .current_dir(path)
-        .args(["diff"])
+        .args(["restore", "--staged", "."])
+        .output();
+
+    // 2. Stage exactly the files they selected in the UI
+    for file in files {
+        let out = build_hidden_cmd("git")
+            .current_dir(path)
+            .args(["add", &file])
+            .output()
+            .map_err(|e| e.to_string())?;
+        if !out.status.success() {
+            return Err(String::from_utf8_lossy(&out.stderr).to_string());
+        }
+    }
+
+    // 3. Get file name summaries (Table of contents)
+    let summary_output = build_hidden_cmd("git")
+        .current_dir(path)
+        .args(["diff", "--cached", "--name-status"])
         .output()
         .map_err(|e| e.to_string())?;
-
-    let staged_output = build_hidden_cmd("git")
+        
+    // 4. Get the deep code diff
+    let diff_output = build_hidden_cmd("git")
         .current_dir(path)
         .args(["diff", "--cached"])
         .output()
         .map_err(|e| e.to_string())?;
 
-    let mut full_diff = String::from_utf8_lossy(&output.stdout).to_string();
-    full_diff.push_str(&String::from_utf8_lossy(&staged_output.stdout));
+    let mut full_diff = String::from_utf8_lossy(&summary_output.stdout).to_string();
+    full_diff.push_str("\n\n");
+    full_diff.push_str(&String::from_utf8_lossy(&diff_output.stdout));
     
-    if full_diff.len() > 8000 {
-        full_diff.truncate(8000);
+    // Increased truncation limit for modern models
+    if full_diff.len() > 40000 {
+        full_diff.truncate(40000);
         full_diff.push_str("\n... [Diff truncated due to length limitations]");
     }
+    
+    // 5. Restore back to original state so we don't accidentally leave things staged if they cancel
+    let _ = build_hidden_cmd("git")
+        .current_dir(path)
+        .args(["restore", "--staged", "."])
+        .output();
+        
     Ok(full_diff)
 }
 
@@ -153,7 +182,12 @@ fn commit_changes(path: &str, message: &str, files: Vec<String>) -> Result<(), S
 #[tauri::command]
 async fn generate_ai_commit(diff: String, config: AiConfig) -> Result<String, String> {
     let prompt = format!(
-        "You are an expert developer. Generate a concise, conventional commit message for the following git diff. Return ONLY the commit message (in the format '<type>: <subject>') without any markdown ticks, extra explanations, or quotes.\n\nDiff:\n{}", 
+        "You are an expert developer inspecting a git diff. Generate a concise, conventional commit message summarizing the changes.
+Return ONLY the commit message (in the format '<type>: <subject>') without any markdown ticks, conversational text, extra explanations, or quotes.
+The <type> MUST be one of the following: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert.
+
+Diff to analyze:
+{}", 
         diff
     );
 

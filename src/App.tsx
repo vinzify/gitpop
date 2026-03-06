@@ -166,14 +166,15 @@ function App() {
   };
 
   const handleSparkle = async () => {
-    if (files.filter(f => f.staged).length === 0) {
+    const stagedFiles = files.filter(f => f.staged).map(f => f.path);
+    if (stagedFiles.length === 0) {
       showToast("Please stage at least one file to generate a commit message.", "info");
       return;
     }
 
     setIsSparkling(true);
     try {
-      const diff: string = await invoke("get_git_diff", { path: repoPath });
+      const diff: string = await invoke("get_git_diff", { path: repoPath, files: stagedFiles });
       const config = { provider: aiProvider, api_key: apiKey, model: aiModel, custom_api_url: customApiUrl };
       const aiResponse: string = await invoke("generate_ai_commit", { diff, config });
       setCommitMessage(aiResponse);
@@ -196,7 +197,7 @@ function App() {
     if (!finalMessage) {
       setIsCommitting(true);
       try {
-        const diff: string = await invoke("get_git_diff", { path: repoPath });
+        const diff: string = await invoke("get_git_diff", { path: repoPath, files: stagedFiles });
         const config = { provider: aiProvider, api_key: apiKey, model: aiModel, custom_api_url: customApiUrl };
         finalMessage = await invoke("generate_ai_commit", { diff, config });
         setCommitMessage(finalMessage);
