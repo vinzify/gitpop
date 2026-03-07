@@ -180,7 +180,19 @@ fn commit_changes(path: &str, message: &str, files: Vec<String>) -> Result<(), S
 }
 
 #[tauri::command]
-async fn generate_ai_commit(diff: String, config: AiConfig) -> Result<String, String> {
+async fn generate_ai_commit(mut diff: String, config: AiConfig) -> Result<String, String> {
+    // Dynamically truncate diff based on provider's typical context limits
+    let max_len = match config.provider.as_str() {
+        "lmstudio" => 10_000, // ~2.5k tokens, safe for 4k context windows
+        "ollama" => 24_000,   // ~6k tokens, safe for 8k context windows
+        _ => 40_000,          // Cloud models have massive windows
+    };
+
+    if diff.len() > max_len {
+        diff.truncate(max_len);
+        diff.push_str("\n... [Diff truncated due to length limitations]");
+    }
+
     let prompt = format!(
         "You are an expert developer inspecting a git diff. Generate a concise, conventional commit message summarizing the changes.
 Return ONLY the commit message (in the format '<type>: <subject>') without any markdown ticks, conversational text, extra explanations, or quotes.
