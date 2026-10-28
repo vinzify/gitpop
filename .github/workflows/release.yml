@@ -57,7 +57,8 @@ jobs:
             gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --draft --prerelease --title "GitPop $RELEASE_TAG" --notes-file docs/RELEASE_NOTES.md
           fi
           test "$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)" = "true"
-          id=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" --jq .id)
+          id=$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" | jq -r --arg tag "$RELEASE_TAG" '.[] | select(.tag_name == $tag) | .id')
+          test -n "$id"
           echo "release_id=$id" >> "$GITHUB_OUTPUT"
 
   publish:
