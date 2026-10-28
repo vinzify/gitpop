@@ -7,17 +7,13 @@
   ],
   "permissions": [
     "core:default",
-    "core:window:default",
-    "core:window:allow-show",
-    "core:window:allow-close",
-    "opener:default",
-    "store:default",
+    "dialog:allow-open",
+    "dialog:allow-message",
     "store:allow-get",
     "store:allow-set",
     "store:allow-load",
     "store:allow-save",
-    "process:default",
-    "process:allow-exit",
+    "store:allow-delete",
     "process:allow-restart",
     "updater:default"
   ]

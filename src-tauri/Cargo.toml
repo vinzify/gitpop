@@ -1,9 +1,17 @@
 [package]
 name = "tauri-appgitpop"
-version = "1.4.10"
-description = "A Tauri App"
-authors = ["you"]
+version = "1.5.0-beta.1"
+description = "A focused, cross-platform Git workbench"
+authors = ["Vincenzo Romeo"]
+license = "MIT"
+repository = "https://github.com/vinzify/gitpop"
 edition = "2021"
+default-run = "gitpop"
+autobins = false
+
+[[bin]]
+name = "gitpop"
+path = "src/main.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -18,15 +26,18 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
-tauri-plugin-opener = "2"
+tauri = { version = "~2.10.2", features = [] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
-winreg = "0.55.0"
+reqwest = { version = "0.13.2", default-features = false, features = ["json", "rustls"] }
+tempfile = "3"
+tauri-plugin-dialog = "~2.7.3"
 tauri-plugin-store = "2"
 tauri-plugin-process = "2"
 tauri-plugin-updater = "2"
+
+[target.'cfg(windows)'.dependencies]
+winreg = "0.55.0"
 
 [profile.release]
 panic = "abort" # Strip expensive panic clean-up logic

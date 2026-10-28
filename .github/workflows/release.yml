@@ -1,54 +1,123 @@
-name: Release GitPop
+name: Draft release
 on:
-  push:
-    tags:
-      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag to build (for example v1.5.0-beta.1)
+        required: true
+        type: string
+      signing_reviewed:
+        description: Signing rotation, manual-install migration, and preview channel have been reviewed
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: release-${{ inputs.tag }}
+  cancel-in-progress: false
 
 jobs:
-  publish:
+  validate:
+    runs-on: ubuntu-latest
     permissions:
       contents: write
-    runs-on: windows-latest
-
+      actions: read
+    outputs:
+      release_id: ${{ steps.draft.outputs.release_id }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Require signing review
+        env:
+          REVIEWED: ${{ inputs.signing_reviewed }}
+        run: test "$REVIEWED" = "true"
+      - uses: actions/checkout@v4
         with:
-          node-version: 20
+          ref: ${{ inputs.tag }}
+      - name: Require a matching version tag
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: node -e 'if(process.env.RELEASE_TAG !== "v"+require("./package.json").version) process.exit(1)'
+      - name: Require successful cross-platform checks for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sha=$(git rev-parse HEAD)
+          count=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --commit "$sha" --status success --json databaseId --jq 'length')
+          test "$count" -gt 0
+      - name: Prepare one draft for all platforms
+        id: draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          if ! gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --draft --prerelease --title "GitPop $RELEASE_TAG" --notes-file docs/RELEASE_NOTES.md
+          fi
+          test "$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)" = "true"
+          id=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" --jq .id)
+          echo "release_id=$id" >> "$GITHUB_OUTPUT"
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+  publish:
+    needs: validate
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            name: linux-x64
+            args: --bundles deb,rpm,appimage
+          - os: windows-latest
+            name: windows-x64
+            args: --bundles nsis,msi
+          - os: macos-latest
+            name: macos-arm64
+            args: --target aarch64-apple-darwin
+          - os: macos-latest
+            name: macos-x64
+            args: --target x86_64-apple-darwin
+    name: Bundle / ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    env:
+      APPIMAGE_EXTRACT_AND_RUN: "1"
+    steps:
+      - uses: actions/checkout@v4
         with:
-          targets: x86_64-pc-windows-msvc
-
-      - name: Install web dependencies
-        run: npm install
-
-      - name: Build and Publish Tauri App
+          ref: ${{ inputs.tag }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+        if: runner.os == 'macOS'
+      - uses: dtolnay/rust-toolchain@stable
+        if: runner.os != 'macOS'
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - name: Linux system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libssl-dev libwayland-dev libayatana-appindicator3-dev librsvg2-dev patchelf libfuse2
+      - run: npm ci
+      - name: Build signed artifacts into the draft prerelease
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_V2 }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_V2_PASSWORD }}
         with:
-          tagName: v__VERSION__
-          releaseName: 'GitPop v__VERSION__'
-          releaseBody: |
-            ## What's Changed
-
-            ### 🚀 New Features
-            - **LM Studio Support**: Added native support for LM Studio and other OpenAI-compatible local AI runners.
-            - **Model Discovery**: Auto-populate models from LM Studio and custom endpoints using the standard `/v1/models` API. 
-            - **Refresh Models**: Added a refresh button in settings to pull latest models from local runners.
-
-            ### 🔧 Improvements
-            - Settings UI now distinguishes better between cloud and local providers.
-            - Improved model selection logic for "Custom" providers.
-
-            ### 📦 Installation
-            **Windows users:** Download `GitPop___VERSION___x64_en-US.msi` from the assets below, run it, and then launch GitPop from your Start Menu to install the context menu extension.
-          releaseDraft: false
-          prerelease: false
+          releaseId: ${{ needs.validate.outputs.release_id }}
+          tagName: ${{ inputs.tag }}
+          releaseDraft: true
+          prerelease: true
+          includeUpdaterJson: true
+          updaterJsonPreferNsis: true
+          args: ${{ matrix.args }}

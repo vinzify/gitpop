@@ -1,672 +1,131 @@
-use serde::{Deserialize, Serialize};
-use std::process::Command;
-use reqwest::Client;
-use winreg::enums::*;
-use winreg::RegKey;
+mod ai;
+mod git;
+mod platform;
 
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
+use serde::Serialize;
 
-#[cfg(target_os = "windows")]
-const CREATE_NO_WINDOW: u32 = 0x08000000;
-
-fn build_hidden_cmd(program: &str) -> Command {
-    let mut cmd = Command::new(program);
-    #[cfg(target_os = "windows")]
-    cmd.creation_flags(CREATE_NO_WINDOW);
-    cmd
-}
-
-#[derive(Serialize, Deserialize)]
-struct OllamaRequest {
-    model: String,
-    prompt: String,
-    stream: bool,
-}
-
-#[derive(Serialize, Deserialize)]
-struct OllamaResponse {
-    response: String,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct OllamaModel {
-    name: String,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct OllamaTagsResponse {
-    models: Vec<OllamaModel>,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct GitFileStatus {
-    path: String,
-    status: String,
-    staged: bool,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct AiConfig {
-    provider: String, // "ollama", "openai", "gemini", "anthropic", "custom"
-    api_key: Option<String>,
-    model: String,
-    custom_api_url: Option<String>,
-}
-
-#[tauri::command]
-fn get_git_status(path: &str) -> Result<Vec<GitFileStatus>, String> {
-    let output = build_hidden_cmd("git")
-        .current_dir(path)
-        .args(["status", "--porcelain"])
-        .output()
-        .map_err(|e| e.to_string())?;
-
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let mut files = Vec::new();
-
-    for line in stdout.lines() {
-        if line.len() < 4 { continue; }
-        let status_chars = &line[0..2];
-        let file_path = &line[3..];
-
-        let index_status = status_chars.chars().nth(0).unwrap();
-        let work_status = status_chars.chars().nth(1).unwrap();
-        let staged = index_status != ' ' && index_status != '?';
-
-        let mut status = "U".to_string();
-        if status_chars == "??" { status = "U".to_string(); }
-        else if index_status == 'A' || work_status == 'A' { status = "A".to_string(); }
-        else if index_status == 'M' || work_status == 'M' { status = "M".to_string(); }
-        else if index_status == 'D' || work_status == 'D' { status = "D".to_string(); }
-
-        files.push(GitFileStatus {
-            path: file_path.trim().to_string(),
-            status,
-            staged,
-        });
-    }
-    Ok(files)
-}
-
-#[tauri::command]
-fn get_git_diff(path: &str, files: Vec<String>) -> Result<String, String> {
-    // 1. Unstage everything to get a clean state
-    let _ = build_hidden_cmd("git")
-        .current_dir(path)
-        .args(["restore", "--staged", "."])
-        .output();
-
-    // 2. Stage exactly the files they selected in the UI
-    for file in files {
-        let out = build_hidden_cmd("git")
-            .current_dir(path)
-            .args(["add", &file])
-            .output()
-            .map_err(|e| e.to_string())?;
-        if !out.status.success() {
-            return Err(String::from_utf8_lossy(&out.stderr).to_string());
-        }
-    }
-
-    // 3. Get file name summaries (Table of contents)
-    let summary_output = build_hidden_cmd("git")
-        .current_dir(path)
-        .args(["diff", "--cached", "--name-status"])
-        .output()
-        .map_err(|e| e.to_string())?;
-        
-    // 4. Get the deep code diff
-    let diff_output = build_hidden_cmd("git")
-        .current_dir(path)
-        .args(["diff", "--cached"])
-        .output()
-        .map_err(|e| e.to_string())?;
-
-    let mut full_diff = String::from_utf8_lossy(&summary_output.stdout).to_string();
-    full_diff.push_str("\n\n");
-    full_diff.push_str(&String::from_utf8_lossy(&diff_output.stdout));
-    
-    // Increased truncation limit for modern models
-    if full_diff.len() > 40000 {
-        full_diff.truncate(40000);
-        full_diff.push_str("\n... [Diff truncated due to length limitations]");
-    }
-    
-    // 5. Restore back to original state so we don't accidentally leave things staged if they cancel
-    let _ = build_hidden_cmd("git")
-        .current_dir(path)
-        .args(["restore", "--staged", "."])
-        .output();
-        
-    Ok(full_diff)
-}
-
-#[tauri::command]
-fn commit_changes(path: &str, message: &str, files: Vec<String>) -> Result<(), String> {
-    // Unstage everything first to match our UI state
-    let _ = build_hidden_cmd("git")
-        .current_dir(path)
-        .args(["restore", "--staged", "."])
-        .output();
-
-    // Stage selected files
-    for file in files {
-        let out = build_hidden_cmd("git")
-            .current_dir(path)
-            .args(["add", &file])
-            .output()
-            .map_err(|e| e.to_string())?;
-        if !out.status.success() {
-            return Err(String::from_utf8_lossy(&out.stderr).to_string());
-        }
-    }
-
-    // Commit
-    let commit_out = build_hidden_cmd("git")
-        .current_dir(path)
-        .args(["commit", "-m", message])
-        .output()
-        .map_err(|e| e.to_string())?;
-
-    if !commit_out.status.success() {
-        return Err(String::from_utf8_lossy(&commit_out.stderr).to_string());
-    }
-    Ok(())
-}
-
-#[tauri::command]
-async fn generate_ai_commit(mut diff: String, config: AiConfig) -> Result<String, String> {
-    // Dynamically truncate diff based on provider's typical context limits
-    let max_len = match config.provider.as_str() {
-        "lmstudio" => 10_000, // ~2.5k tokens, safe for 4k context windows
-        "ollama" => 24_000,   // ~6k tokens, safe for 8k context windows
-        _ => 40_000,          // Cloud models have massive windows
-    };
-
-    if diff.len() > max_len {
-        diff.truncate(max_len);
-        diff.push_str("\n... [Diff truncated due to length limitations]");
-    }
-
-    let prompt = format!(
-        "You are an expert developer inspecting a git diff. Generate a concise, conventional commit message summarizing the changes.
-Return ONLY the commit message (in the format '<type>: <subject>') without any markdown ticks, conversational text, extra explanations, or quotes.
-The <type> MUST be one of the following: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert.
-
-Diff to analyze:
-{}", 
-        diff
-    );
-
-    let client = Client::builder()
-        .timeout(std::time::Duration::from_secs(45))
-        .build()
-        .map_err(|e| e.to_string())?;
-        
-    match config.provider.as_str() {
-        "ollama" => {
-            let req_body = OllamaRequest {
-                model: config.model,
-                prompt,
-                stream: false,
-            };
-
-            let res = client.post("http://localhost:11434/api/generate")
-                .json(&req_body)
-                .send()
-                .await
-                .map_err(|e| format!("Failed to connect to local Ollama (is it running on port 11434?): {}", e))?;
-
-            if !res.status().is_success() {
-                return Err(format!("Ollama API error: {}", res.status()));
-            }
-
-            let parsed: OllamaResponse = res.json()
-                .await
-                .map_err(|e| format!("Failed to parse Ollama response: {}", e))?;
-
-            Ok(parsed.response.trim().to_string())
-        }
-        "lmstudio" => {
-            let res = client.post("http://localhost:1234/v1/chat/completions")
-                .json(&serde_json::json!({
-                    "model": config.model,
-                    "messages": [{"role": "user", "content": prompt}]
-                }))
-                .send()
-                .await
-                .map_err(|e| format!("Failed to connect to local LM Studio (is it running on port 1234?): {}", e))?;
-                
-            if !res.status().is_success() {
-                let error_text = res.text().await.unwrap_or_default();
-                return Err(format!("LM Studio API error: {}", error_text));
-            }
-
-            let parsed: serde_json::Value = res.json()
-                .await
-                .map_err(|e| format!("Failed to parse LM Studio response: {}", e))?;
-                
-            if let Some(choices) = parsed.get("choices") {
-                if let Some(first_choice) = choices.get(0) {
-                    if let Some(message) = first_choice.get("message") {
-                        if let Some(content) = message.get("content") {
-                            return Ok(content.as_str().unwrap_or_default().trim().to_string());
-                        }
-                    }
-                }
-            }
-            Err("Unexpected response structure from LM Studio".to_string())
-        }
-        "openai" => {
-            let res = client.post("https://api.openai.com/v1/chat/completions")
-                .bearer_auth(config.api_key.unwrap_or_default())
-                .json(&serde_json::json!({
-                    "model": config.model,
-                    "messages": [{"role": "user", "content": prompt}]
-                }))
-                .send()
-                .await
-                .map_err(|e| format!("Failed to connect to OpenAI: {}", e))?;
-                
-            if !res.status().is_success() {
-                let error_text = res.text().await.unwrap_or_default();
-                return Err(format!("OpenAI API error: {} {}", error_text, "Check your API key."));
-            }
-
-            let parsed: serde_json::Value = res.json()
-                .await
-                .map_err(|e| format!("Failed to parse OpenAI response: {}", e))?;
-                
-            if let Some(choices) = parsed.get("choices") {
-                if let Some(first_choice) = choices.get(0) {
-                    if let Some(message) = first_choice.get("message") {
-                        if let Some(content) = message.get("content") {
-                            return Ok(content.as_str().unwrap_or_default().trim().to_string());
-                        }
-                    }
-                }
-            }
-            Err("Unexpected response structure from OpenAI".to_string())
-        }
-        "gemini" => {
-            let url = format!("https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}", 
-                config.model, config.api_key.unwrap_or_default());
-            
-            let res = client.post(&url)
-                .json(&serde_json::json!({
-                    "contents": [{"parts": [{"text": prompt}]}]
-                }))
-                .send()
-                .await
-                .map_err(|e| format!("Failed to connect to Gemini: {}", e))?;
-
-            if !res.status().is_success() {
-                let error_text = res.text().await.unwrap_or_default();
-                return Err(format!("Gemini API error: {} {}", error_text, "Check your API key."));
-            }
-
-            let parsed: serde_json::Value = res.json()
-                .await
-                .map_err(|e| format!("Failed to parse Gemini response: {}", e))?;
-                
-             if let Some(candidates) = parsed.get("candidates") {
-                if let Some(first_candidate) = candidates.get(0) {
-                    if let Some(content) = first_candidate.get("content") {
-                        if let Some(parts) = content.get("parts") {
-                            if let Some(first_part) = parts.get(0) {
-                                if let Some(text) = first_part.get("text") {
-                                    return Ok(text.as_str().unwrap_or_default().trim().to_string());
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            Err("Unexpected response structure from Gemini".to_string())
-        }
-        "anthropic" => {
-            let res = client.post("https://api.anthropic.com/v1/messages")
-                .header("x-api-key", config.api_key.unwrap_or_default())
-                .header("anthropic-version", "2023-06-01")
-                .header("content-type", "application/json")
-                .json(&serde_json::json!({
-                    "model": config.model,
-                    "max_tokens": 1024,
-                    "messages": [{"role": "user", "content": prompt}]
-                }))
-                .send()
-                .await
-                .map_err(|e| format!("Failed to connect to Anthropic: {}", e))?;
-                
-            if !res.status().is_success() {
-                let error_text = res.text().await.unwrap_or_default();
-                return Err(format!("Anthropic API error: {} {}", error_text, "Check your API key."));
-            }
-
-            let parsed: serde_json::Value = res.json()
-                .await
-                .map_err(|e| format!("Failed to parse Anthropic response: {}", e))?;
-                
-            if let Some(content_array) = parsed.get("content") {
-                if let Some(first_content) = content_array.get(0) {
-                    if let Some(text) = first_content.get("text") {
-                        return Ok(text.as_str().unwrap_or_default().trim().to_string());
-                    }
-                }
-            }
-            Err("Unexpected response structure from Anthropic".to_string())
-        }
-        "custom" => {
-            let base_url = config.custom_api_url.unwrap_or_else(|| "https://api.openai.com/v1".to_string());
-            let url = if base_url.ends_with("/chat/completions") {
-                base_url
-            } else if base_url.ends_with('/') {
-                format!("{}chat/completions", base_url)
-            } else {
-                format!("{}/chat/completions", base_url)
-            };
-
-            let res = client.post(&url)
-                .bearer_auth(config.api_key.unwrap_or_default())
-                .json(&serde_json::json!({
-                    "model": config.model,
-                    "messages": [{"role": "user", "content": prompt}]
-                }))
-                .send()
-                .await
-                .map_err(|e| format!("Failed to connect to Custom endpoint: {}", e))?;
-                
-            if !res.status().is_success() {
-                let error_text = res.text().await.unwrap_or_default();
-                return Err(format!("Custom API error: {} {}", error_text, "Check your URL and API key."));
-            }
-
-            let parsed: serde_json::Value = res.json()
-                .await
-                .map_err(|e| format!("Failed to parse Custom endpoint response: {}", e))?;
-                
-            if let Some(choices) = parsed.get("choices") {
-                if let Some(first_choice) = choices.get(0) {
-                    if let Some(message) = first_choice.get("message") {
-                        if let Some(content) = message.get("content") {
-                            return Ok(content.as_str().unwrap_or_default().trim().to_string());
-                        }
-                    }
-                }
-            }
-            Err("Unexpected response structure from Custom endpoint".to_string())
-        }
-        _ => Err("Unknown AI provider".to_string()),
-    }
-}
-
-#[tauri::command]
-async fn get_ollama_models() -> Result<Vec<String>, String> {
-    let output = build_hidden_cmd("ollama")
-        .arg("list")
-        .output()
-        .map_err(|e| format!("Failed to execute 'ollama list': {}", e))?;
-
-    if !output.status.success() {
-        let err = String::from_utf8_lossy(&output.stderr);
-        return Err(format!("'ollama list' failed: {}", err));
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let mut models = Vec::new();
-
-    for line in stdout.lines().skip(1) {
-        if let Some(model_name) = line.split_whitespace().next() {
-            if !model_name.is_empty() {
-                models.push(model_name.to_string());
-            }
-        }
-    }
-
-    Ok(models)
-}
-
-#[tauri::command]
-async fn get_openai_models(url: String, api_key: Option<String>) -> Result<Vec<String>, String> {
-    let client = reqwest::Client::new();
-    let mut request = client.get(format!("{}/models", url.trim_end_matches('/')));
-    
-    if let Some(key) = api_key {
-        if !key.trim().is_empty() {
-            request = request.bearer_auth(key);
-        }
-    }
-    
-    let res = request.send()
+async fn blocking<T: Send + 'static>(
+    work: impl FnOnce() -> Result<T, String> + Send + 'static,
+) -> Result<T, String> {
+    tauri::async_runtime::spawn_blocking(work)
         .await
-        .map_err(|e| format!("Failed to connect to AI provider: {}", e))?;
-        
-    if !res.status().is_success() {
-        return Err(format!("AI provider returned error: {}", res.status()));
-    }
-    
-    let json: serde_json::Value = res.json()
-        .await
-        .map_err(|e| format!("Failed to parse response: {}", e))?;
-        
-    let mut models = Vec::new();
-    if let Some(data) = json.get("data").and_then(|d| d.as_array()) {
-        for model in data {
-            if let Some(id) = model.get("id").and_then(|i| i.as_str()) {
-                models.push(id.to_string());
-            }
-        }
-    }
-    
-    Ok(models)
-}
-
-#[tauri::command]
-fn get_startup_dir() -> Result<String, String> {
-    let args: Vec<String> = std::env::args().collect();
-    if args.len() > 1 {
-        let mut path = args[1].clone();
-        if path.ends_with('"') {
-            path.pop();
-        }
-        Ok(path)
-    } else {
-        std::env::current_dir()
-            .map(|p| p.to_string_lossy().into_owned())
-            .map_err(|e| e.to_string())
-    }
-}
-
-#[tauri::command]
-fn install_context_menu() -> Result<(), String> {
-    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-    let exe_path = std::env::current_exe()
         .map_err(|e| e.to_string())?
-        .to_string_lossy()
-        .into_owned();
-
-    // 1. Directory Background
-    let bg_path = r#"Software\Classes\Directory\Background\shell\GitPop"#;
-    let (bg_key, _) = hkcu.create_subkey(bg_path).map_err(|e| e.to_string())?;
-    bg_key.set_value("", &"GitPop Here").map_err(|e| e.to_string())?;
-    bg_key.set_value("Icon", &exe_path).map_err(|e| e.to_string())?;
-
-    let (bg_cmd, _) = bg_key.create_subkey("command").map_err(|e| e.to_string())?;
-    bg_cmd.set_value("", &format!("\"{}\" \"%V\"", exe_path)).map_err(|e| e.to_string())?;
-
-    // 2. Directory Folder
-    let dir_path = r#"Software\Classes\Directory\shell\GitPop"#;
-    let (dir_key, _) = hkcu.create_subkey(dir_path).map_err(|e| e.to_string())?;
-    dir_key.set_value("", &"GitPop Here").map_err(|e| e.to_string())?;
-    dir_key.set_value("Icon", &exe_path).map_err(|e| e.to_string())?;
-
-    let (dir_cmd, _) = dir_key.create_subkey("command").map_err(|e| e.to_string())?;
-    dir_cmd.set_value("", &format!("\"{}\" \"%1\"", exe_path)).map_err(|e| e.to_string())?;
-
-    Ok(())
 }
 
 #[tauri::command]
-fn uninstall_context_menu() -> Result<(), String> {
-    let hkcu = RegKey::predef(HKEY_CURRENT_USER);
-    let _ = hkcu.delete_subkey_all(r#"Software\Classes\Directory\Background\shell\GitPop"#);
-    let _ = hkcu.delete_subkey_all(r#"Software\Classes\Directory\shell\GitPop"#);
-    Ok(())
+async fn get_repository(path: String) -> Result<git::Repository, String> {
+    blocking(move || git::repository(&path)).await
 }
 
 #[tauri::command]
-fn init_repo(path: &str, remote_url: Option<String>) -> Result<(), String> {
-    // git init
-    let init_out = build_hidden_cmd("git")
-        .current_dir(path)
-        .args(["init"])
-        .output()
-        .map_err(|e| e.to_string())?;
-
-    if !init_out.status.success() {
-        return Err(format!("git init failed: {}", String::from_utf8_lossy(&init_out.stderr)));
-    }
-
-    // Optionally add remote
-    if let Some(url) = remote_url {
-        let trimmed = url.trim();
-        if !trimmed.is_empty() {
-            let remote_out = build_hidden_cmd("git")
-                .current_dir(path)
-                .args(["remote", "add", "origin", trimmed])
-                .output()
-                .map_err(|e| e.to_string())?;
-
-            if !remote_out.status.success() {
-                return Err(format!("git remote add failed: {}", String::from_utf8_lossy(&remote_out.stderr)));
-            }
-        }
-    }
-
-    Ok(())
+async fn get_git_diff(path: String, files: Vec<String>) -> Result<String, String> {
+    blocking(move || git::diff(&path, &files)).await
 }
 
 #[tauri::command]
-fn get_repo_root(path: &str) -> Result<String, String> {
-    let output = build_hidden_cmd("git")
-        .current_dir(path)
-        .args(["rev-parse", "--show-toplevel"])
-        .output()
-        .map_err(|e| e.to_string())?;
-
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).to_string());
-    }
-
-    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct SyncStatus {
-    ahead: u32,
-    has_upstream: bool,
-    branch: String,
+async fn commit_changes(
+    path: String,
+    message: String,
+    files: Vec<String>,
+) -> Result<String, String> {
+    blocking(move || git::commit(&path, &message, &files)).await
 }
 
 #[tauri::command]
-fn get_sync_status(path: &str) -> Result<SyncStatus, String> {
-    // Get current branch name
-    let branch_out = build_hidden_cmd("git")
-        .current_dir(path)
-        .args(["rev-parse", "--abbrev-ref", "HEAD"])
-        .output()
-        .map_err(|e| e.to_string())?;
-
-    let branch = if branch_out.status.success() {
-        String::from_utf8_lossy(&branch_out.stdout).trim().to_string()
-    } else {
-        "main".to_string()
-    };
-
-    // Try to get ahead count — this fails if no upstream is set
-    let ahead_out = build_hidden_cmd("git")
-        .current_dir(path)
-        .args(["rev-list", "--count", "@{u}..HEAD"])
-        .output();
-
-    match ahead_out {
-        Ok(output) if output.status.success() => {
-            let count_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
-            let ahead = count_str.parse::<u32>().unwrap_or(0);
-            Ok(SyncStatus { ahead, has_upstream: true, branch })
-        }
-        _ => {
-            // No upstream configured (new branch or never pushed)
-            // Count all commits to know if there's something to push
-            let count_out = build_hidden_cmd("git")
-                .current_dir(path)
-                .args(["rev-list", "--count", "HEAD"])
-                .output();
-
-            let ahead = match count_out {
-                Ok(o) if o.status.success() => {
-                    String::from_utf8_lossy(&o.stdout).trim().parse::<u32>().unwrap_or(0)
-                }
-                _ => 0,
-            };
-
-            Ok(SyncStatus { ahead, has_upstream: false, branch })
-        }
-    }
+async fn push_changes(path: String) -> Result<(), String> {
+    blocking(move || git::push(&path)).await
 }
 
 #[tauri::command]
-fn push_changes(path: &str, set_upstream: Option<bool>, branch: Option<String>) -> Result<(), String> {
-    let mut args = vec!["push".to_string()];
-
-    if set_upstream.unwrap_or(false) {
-        args.push("-u".to_string());
-        args.push("origin".to_string());
-        if let Some(b) = branch {
-            args.push(b);
-        }
-    }
-
-    let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
-    let out = build_hidden_cmd("git")
-        .current_dir(path)
-        .args(&arg_refs)
-        .output()
-        .map_err(|e| e.to_string())?;
-
-    if !out.status.success() {
-        return Err(String::from_utf8_lossy(&out.stderr).to_string());
-    }
-    Ok(())
+async fn init_repo(path: String, remote_url: Option<String>) -> Result<(), String> {
+    blocking(move || git::init(&path, remote_url.as_deref())).await
 }
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
+#[tauri::command]
+async fn generate_ai_commit(
+    diff: String,
+    config: ai::AiConfig,
+    client: tauri::State<'_, reqwest::Client>,
+) -> Result<String, String> {
+    ai::generate(diff, config, &client).await
+}
+
+#[tauri::command]
+async fn get_models(
+    config: ai::AiConfig,
+    client: tauri::State<'_, reqwest::Client>,
+) -> Result<Vec<String>, String> {
+    ai::models(config, &client).await
+}
+
+#[derive(Serialize)]
+struct LaunchInfo {
+    platform: &'static str,
+    integration: Option<&'static str>,
+    startup_path: Option<String>,
+}
+
+#[tauri::command]
+async fn get_launch_info() -> Result<LaunchInfo, String> {
+    blocking(|| {
+        let explicit = std::env::args_os()
+            .skip(1)
+            .find(|arg| !arg.to_string_lossy().starts_with('-'));
+        let startup_path = if let Some(path) = explicit {
+            Some(
+                path.to_str()
+                    .ok_or("The folder path must be valid UTF-8.")?
+                    .to_owned(),
+            )
+        } else {
+            std::env::current_dir()
+                .ok()
+                .and_then(|p| p.to_str().map(str::to_owned))
+                .filter(|p| git::repository(p).is_ok())
+        };
+        Ok(LaunchInfo {
+            platform: std::env::consts::OS,
+            integration: platform::integration_name(),
+            startup_path,
+        })
+    })
+    .await
+}
+
+#[tauri::command]
+async fn install_context_menu(app: tauri::AppHandle) -> Result<String, String> {
+    blocking(move || platform::install(&app)).await
+}
+
+#[tauri::command]
+async fn uninstall_context_menu(app: tauri::AppHandle) -> Result<String, String> {
+    blocking(move || platform::uninstall(&app)).await
+}
+
 pub fn run() {
+    let client = reqwest::Client::builder()
+        .connect_timeout(std::time::Duration::from_secs(8))
+        .timeout(std::time::Duration::from_secs(120))
+        .build()
+        .expect("could not initialize networking");
     tauri::Builder::default()
+        .manage(client)
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_store::Builder::new().build())
-        .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
-            get_git_status,
+            get_repository,
             get_git_diff,
             commit_changes,
-            generate_ai_commit,
-            get_ollama_models,
-            get_startup_dir,
-            install_context_menu,
-            uninstall_context_menu,
-            get_repo_root,
             push_changes,
-            get_sync_status,
             init_repo,
-            get_openai_models
+            generate_ai_commit,
+            get_models,
+            get_launch_info,
+            install_context_menu,
+            uninstall_context_menu
         ])
         .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .expect("error while running GitPop");
 }
