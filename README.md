@@ -1,5 +1,7 @@
 # GitPop
 
+[![Checks](https://github.com/vinzify/gitpop/actions/workflows/ci.yml/badge.svg)](https://github.com/vinzify/gitpop/actions/workflows/ci.yml)
+
 ### Less ceremony. More shipping.
 
 A focused Git workbench for reviewing changes, writing commits, and pushing when
@@ -13,7 +15,7 @@ not a requirement for using your Git tools.
 *Actual interface captured using fictional development fixtures. No private code,
 credentials, or real repository paths are shown.*
 
-> **1.5 preview:** Linux, Windows, and macOS packages are being validated for
+> **1.5 preview available:** Download Linux, Windows, and macOS packages from
 > [v1.5.0-beta.1](https://github.com/vinzify/gitpop/releases/tag/v1.5.0-beta.1).
 > Existing 1.4.x users must install this preview manually because updater signing
 > has been rotated. The old stable channel is unchanged.
@@ -180,4 +182,5 @@ support for every Linux desktop or distribution.
 
 ## License
 
-[MIT](LICENSE). Contributions and focused bug reports are welcome.
+[MIT](LICENSE). Bundled fonts retain their [OFL licenses](public/licenses/).
+Contributions and focused bug reports are welcome.

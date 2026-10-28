@@ -22,8 +22,9 @@ Before a public release:
    trust the old public key and cannot validate a release signed only by the new
    key. A manual reinstall from verified official release assets may be required.
    Do not assume a bridge signed by a potentially exposed key re-establishes trust.
-5. Review the existing `latest.json` and updater endpoint. This development change
-   deliberately leaves the published stable manifest and verification key alone.
+5. Review the existing `latest.json` and updater endpoint. Published stable
+   artifacts/manifests retain their original key; the new preview embeds the
+   rotated key and uses the separate `preview.json` endpoint.
 
 ## Validate
 
@@ -62,3 +63,17 @@ signing migration has been reviewed. Check version consistency, create the tag,
 then dispatch the workflow with that tag. Verify all assets/signatures and update
 metadata before publishing. GitHub updater signatures are separate from Windows
 code signing and Apple signing/notarization.
+
+The workflow maps `X.Y.Z-beta.N` to numeric MSI version `X.Y.Z.N`; a stable
+`X.Y.Z` maps to `X.Y.Z.65535`. This is an installer-only override: the app and
+updater keep the original semantic version. Default MSI bundling from a beta
+source checkout needs the same WiX version override.
+
+Each platform uploads packages/signatures without touching updater metadata.
+A single final job requires all four builds and creates `latest.json` with Linux
+x86_64, Windows x64, macOS Apple Silicon, and macOS Intel entries. This avoids
+parallel writers dropping platforms or replacing one another's draft assets.
+
+After verifying every signature and the complete manifest, upload SHA256SUMS,
+copy the manifest to `preview.json` on main, and publish as a **prerelease** with
+`--latest=false`. Do not replace the old stable `latest.json` channel.

@@ -40,7 +40,9 @@ warnings for an untrusted or unexpected download.
 
 Check the published SHA256SUMS before installing. Native Windows/macOS desktop
 interaction, authentication prompts, and some Linux desktop combinations still
-need field testing. See docs/VALIDATION.md and the README for exact boundaries.
+need field testing. See the
+[validation record](https://github.com/vinzify/gitpop/blob/main/docs/VALIDATION.md)
+and README for exact boundaries.
 
 Whole-file selection includes unstaged edits. This preview does not implement
 hunk staging, pulling, conflict resolution, or Finder integration.
