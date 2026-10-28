@@ -74,7 +74,7 @@ jobs:
             args: --bundles deb,rpm,appimage
           - os: windows-latest
             name: windows-x64
-            args: --bundles nsis,msi
+            args: --bundles nsis,msi --config src-tauri/tauri.release-windows.conf.json
           - os: macos-latest
             name: macos-arm64
             args: --target aarch64-apple-darwin
@@ -102,12 +102,25 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          cache-on-failure: true
       - name: Linux system dependencies
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libssl-dev libwayland-dev libayatana-appindicator3-dev librsvg2-dev patchelf libfuse2
       - run: npm ci
+      - name: Map preview version to numeric MSI version
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const version = require('./package.json').version;
+          const match = version.match(/^(\d+\.\d+\.\d+)(?:-beta\.(\d+))?$/);
+          if (!match || (match[2] && Number(match[2]) >= 65535)) throw Error('Unsupported MSI version: ' + version);
+          const numeric = match[1] + '.' + (match[2] || '65535');
+          fs.writeFileSync('src-tauri/tauri.release-windows.conf.json', JSON.stringify({ bundle: { windows: { wix: { version: numeric } } } }));
+          NODE
       - name: Build signed artifacts into the draft prerelease
         uses: tauri-apps/tauri-action@v0
         env:
@@ -119,6 +132,58 @@ jobs:
           tagName: ${{ inputs.tag }}
           releaseDraft: true
           prerelease: true
-          includeUpdaterJson: true
+          includeUpdaterJson: false
           updaterJsonPreferNsis: true
           args: ${{ matrix.args }}
+
+  metadata:
+    name: Finalize updater metadata
+    needs: [validate, publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ inputs.tag }}
+      RELEASE_ID: ${{ needs.validate.outputs.release_id }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Download final asset inventory and signatures
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" > release-assets.json
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern '*.sig' --dir signatures
+      - name: Generate one complete manifest
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const assets = require('./release-assets.json').assets;
+          const platforms = {};
+          const patterns = {
+            'linux-x86_64': /_amd64\.AppImage$/,
+            'windows-x86_64': /_x64-setup\.exe$/,
+            'darwin-aarch64': /_aarch64\.app\.tar\.gz$/,
+            'darwin-x86_64': /_x64\.app\.tar\.gz$/,
+          };
+          for (const [platform, pattern] of Object.entries(patterns)) {
+            const artifact = assets.find(asset => pattern.test(asset.name));
+            if (!artifact || !assets.some(asset => asset.name === artifact.name + '.sig')) throw Error('Missing signed artifact: ' + platform);
+            const signature = fs.readFileSync('signatures/' + artifact.name + '.sig', 'utf8').trim();
+            platforms[platform] = {
+              signature,
+              url: 'https://github.com/' + process.env.GITHUB_REPOSITORY + '/releases/download/' + process.env.RELEASE_TAG + '/' + encodeURIComponent(artifact.name),
+            };
+          }
+          fs.writeFileSync('latest.json', JSON.stringify({
+            version: require('./package.json').version,
+            notes: fs.readFileSync('docs/RELEASE_NOTES.md', 'utf8'),
+            pub_date: new Date().toISOString(),
+            platforms,
+          }, null, 2) + '\n');
+          NODE
+      - name: Upload manifest without publishing the draft
+        run: gh release upload "$RELEASE_TAG" latest.json --repo "$GITHUB_REPOSITORY" --clobber
